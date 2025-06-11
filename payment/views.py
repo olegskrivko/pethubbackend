@@ -127,34 +127,34 @@ def handle_subscription_deleted(subscription):
         pass
 
 
-# @api_view(["POST"])
-# @permission_classes([IsAuthenticated])
-# def create_one_time_payment_session(request):
-#     user = request.user
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def create_one_time_payment_session(request):
+    user = request.user
 
-#     try:
-#         checkout_session = stripe.checkout.Session.create(
-#             payment_method_types=["card"],
-#             customer_email=user.email,
-#             line_items=[
-#                 {
-#                     "price_data": {
-#                         "currency": "usd",
-#                         "product_data": {
-#                             "name": "One-Time Service",
-#                         },
-#                         "unit_amount": 1000,  # $10.00
-#                     },
-#                     "quantity": 1,
-#                 }
-#             ],
-#             mode="payment",  # 👈 One-time payment mode
-#             success_url=f"{DOMAIN_APP_URL}/payment-success",
-#             cancel_url=f"{DOMAIN_APP_URL}/payment-cancel",
-#         )
-#         return JsonResponse({"url": checkout_session.url})
-#     except Exception as e:
-#         return Response({"error": str(e)}, status=400)
+    try:
+        checkout_session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            customer_email=user.email,
+            line_items=[
+                {
+                    "price_data": {
+                        "currency": "usd",
+                        "product_data": {
+                            "name": "One-Time Service",
+                        },
+                        "unit_amount": 1000,  # $10.00
+                    },
+                    "quantity": 1,
+                }
+            ],
+            mode="payment",  # 👈 One-time payment mode
+            success_url=f"{DOMAIN_APP_URL}/payment-success",
+            cancel_url=f"{DOMAIN_APP_URL}/payment-cancel",
+        )
+        return JsonResponse({"url": checkout_session.url})
+    except Exception as e:
+        return Response({"error": str(e)}, status=400)
 
 
 # @api_view(["POST"])
