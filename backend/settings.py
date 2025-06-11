@@ -71,8 +71,13 @@ CORS_ALLOW_METHODS = [
 CORS_EXPOSE_HEADERS = [
     'authorization',  # Optional: only needed if you expect to read it in JavaScript
     'x-csrftoken',
+    
 ]
-
+CORS_ALLOW_HEADERS = [
+    "authorization",
+    "content-type",
+    "x-requested-with"
+]
 # Application definition
 
 INSTALLED_APPS = [
