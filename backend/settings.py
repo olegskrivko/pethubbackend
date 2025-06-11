@@ -148,9 +148,24 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # }
 
 
+# DATABASES = {
+#     'default': dj_database_url.parse(os.getenv("DATABASE_URL"), conn_max_age=600)
+# }
+
 DATABASES = {
-    'default': dj_database_url.parse(os.getenv("DATABASE_URL"), conn_max_age=600)
+    'default': {
+        'ENGINE': os.getenv("DATABASES_ENGINE"),
+        'NAME': os.getenv("DATABASES_NAME"),
+        'USER': os.getenv("DATABASES_USER"),
+        'PASSWORD': os.getenv("DATABASES_PASSWORD"),
+        'HOST': os.getenv("DATABASES_HOST"),
+        'PORT': os.getenv("DATABASES_PORT"),
+        'OPTIONS': {
+            'sslmode': 'require',                       
+        },
+    }
 }
+
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
