@@ -305,12 +305,13 @@ CLOUDINARY_STORAGE = {
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_PUBLIC_KEY = os.getenv("STRIPE_PUBLIC_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
-STRIPE_SUBSCRIPTION_PRICE_ID = os.getenv("STRIPE_SUBSCRIPTION_PRICE_ID")
+#STRIPE_SUBSCRIPTION_PRICE_ID = os.getenv("STRIPE_SUBSCRIPTION_PRICE_ID")
 
 STRIPE_SUBSCRIPTION_PRICE_IDS = {
-    'plus': 'price_1RYk7uBnYVUZPzgiGonItYec',  # Your Plus tier price ID
-    'premium': 'price_1RYk6rBnYVUZPzginrD4F4cV'  # Your Premium tier price ID
+    'plus': os.getenv('STRIPE_PLUS_PRICE_ID'), # Your Plus tier price ID
+    'premium': os.getenv('STRIPE_PREMIUM_PRICE_ID') # Your Premium tier price ID
 }
+
 # Base URL of this backend API (e.g., used in serializers or templates)
 API_BASE_URL = os.getenv("API_BASE_URL")
 
