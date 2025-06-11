@@ -88,7 +88,7 @@ CORS_EXPOSE_HEADERS = [
 
 # Additional CORS settings
 CORS_PREFLIGHT_MAX_AGE = 86400  # 24 hours
-CORS_REPLACE_HTTPS_REFERER = True
+#CORS_REPLACE_HTTPS_REFERER = True
 
 # Application definition
 

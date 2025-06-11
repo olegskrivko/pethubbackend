@@ -3,7 +3,7 @@
 
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
-
+from datetime import datetime
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -66,32 +66,70 @@ def create_subscription_session(request):
 def stripe_webhook(request):
     payload = request.body
     sig_header = request.headers.get("Stripe-Signature")
-    
+
     try:
         event = stripe.Webhook.construct_event(
-            payload, 
-            sig_header, 
+            payload,
+            sig_header,
             settings.STRIPE_WEBHOOK_SECRET
         )
     except ValueError:
+        # Invalid payload
         return Response({"error": "Invalid payload"}, status=400)
     except stripe.error.SignatureVerificationError:
+        # Invalid signature
         return Response({"error": "Invalid signature"}, status=400)
 
     try:
+        # Handle different event types
         if event.type == 'checkout.session.completed':
             session = event.data.object
             handle_checkout_session_completed(session)
+
         elif event.type == 'customer.subscription.updated':
             subscription = event.data.object
             handle_subscription_updated(subscription)
+
         elif event.type == 'customer.subscription.deleted':
             subscription = event.data.object
             handle_subscription_deleted(subscription)
-            
+
+        # Add more event types here if needed
+
         return Response(status=200)
+
     except Exception as e:
         return Response({"error": str(e)}, status=500)
+# @csrf_exempt
+# def stripe_webhook(request):
+#     payload = request.body
+#     sig_header = request.headers.get("Stripe-Signature")
+    
+#     try:
+#         event = stripe.Webhook.construct_event(
+#             payload, 
+#             sig_header, 
+#             settings.STRIPE_WEBHOOK_SECRET
+#         )
+#     except ValueError:
+#         return Response({"error": "Invalid payload"}, status=400)
+#     except stripe.error.SignatureVerificationError:
+#         return Response({"error": "Invalid signature"}, status=400)
+
+#     try:
+#         if event.type == 'checkout.session.completed':
+#             session = event.data.object
+#             handle_checkout_session_completed(session)
+#         elif event.type == 'customer.subscription.updated':
+#             subscription = event.data.object
+#             handle_subscription_updated(subscription)
+#         elif event.type == 'customer.subscription.deleted':
+#             subscription = event.data.object
+#             handle_subscription_deleted(subscription)
+            
+#         return Response(status=200)
+#     except Exception as e:
+#         return Response({"error": str(e)}, status=500)
 
 def handle_checkout_session_completed(session):
     customer_email = session.get('customer_email')
@@ -99,32 +137,127 @@ def handle_checkout_session_completed(session):
 
     try:
         user = User.objects.get(email=customer_email)
-        user.is_subscribed = True
-        user.subscription_start = timezone.now()
-        user.stripe_customer_id = session.get('customer')
-        user.subscription_type = subscription_type
-        user.save()
+        
+        # Get the subscription from the session
+        subscription = stripe.Subscription.retrieve(session.subscription)
+        
+        # Update user's subscription using the new method
+        user.update_subscription({
+            'customer_id': session.customer,
+            'subscription_type': subscription_type,
+            'start_date': timezone.now(),
+            'end_date': timezone.datetime.fromtimestamp(subscription.current_period_end),
+            'is_active': True
+        })
+        
+        print(f"User {user.email} subscribed successfully to {subscription_type} plan")
     except User.DoesNotExist:
-        pass
+        print(f"User with email {customer_email} not found")
+    except Exception as e:
+        print(f"Error handling checkout session: {str(e)}")
 
 def handle_subscription_updated(subscription):
     customer_id = subscription.get('customer')
     try:
         user = User.objects.get(stripe_customer_id=customer_id)
-        user.subscription_type = subscription.get('metadata', {}).get('subscription_type', 'plus')
-        user.save()
+        
+        # Update user's subscription using the new method
+        user.update_subscription({
+            'customer_id': customer_id,
+            'subscription_type': subscription.get('metadata', {}).get('subscription_type', 'plus'),
+            'start_date': user.subscription_start,  # Keep existing start date
+            'end_date': timezone.datetime.fromtimestamp(subscription.current_period_end),
+            'is_active': subscription.status == 'active'
+        })
+        
+        print(f"Updated subscription for user {user.email}")
     except User.DoesNotExist:
-        pass
+        print(f"User with customer ID {customer_id} not found")
+    except Exception as e:
+        print(f"Error updating subscription: {str(e)}")
 
 def handle_subscription_deleted(subscription):
     customer_id = subscription.get('customer')
     try:
         user = User.objects.get(stripe_customer_id=customer_id)
-        user.is_subscribed = False
-        user.subscription_type = None
-        user.save()
+        user.cancel_subscription()
+        print(f"Cancelled subscription for user {user.email}")
     except User.DoesNotExist:
-        pass
+        print(f"User with customer ID {customer_id} not found")
+    except Exception as e:
+        print(f"Error cancelling subscription: {str(e)}")
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def cancel_subscription(request):
+    user = request.user
+    try:
+        if not user.stripe_customer_id:
+            return Response({"error": "No Stripe customer ID found."}, status=400)
+        
+        subscriptions = stripe.Subscription.list(
+            customer=user.stripe_customer_id,
+            status='active',
+            limit=1
+        )
+        
+        if not subscriptions.data:
+            return Response({"error": "No active subscription found."}, status=400)
+        
+        subscription = subscriptions.data[0]
+        
+        updated_subscription = stripe.Subscription.modify(
+            subscription.id,
+            cancel_at_period_end=True
+        )
+        
+        cancel_at_ts = updated_subscription.cancel_at
+        cancel_at_str = datetime.fromtimestamp(cancel_at_ts).strftime('%d/%m/%Y') if cancel_at_ts else None
+
+        # Optional: store the cancel date locally
+        # user.subscription_cancel_at = timezone.datetime.fromtimestamp(updated_subscription.cancel_at)
+        # user.save()
+
+        return Response({
+            "message": "Subscription will be canceled at the end of the billing period.",
+            "cancel_at": cancel_at_str
+        })
+    except Exception as e:
+        return Response({"error": f"Cancellation failed: {str(e)}"}, status=400)
+# @api_view(["POST"])
+# @permission_classes([IsAuthenticated])
+# def cancel_subscription(request):
+#     user = request.user
+#     try:
+#         if not user.stripe_customer_id:
+#             return Response({"error": "No Stripe customer ID found."}, status=400)
+        
+#         subscriptions = stripe.Subscription.list(
+#             customer=user.stripe_customer_id,
+#             status='active',
+#             limit=1
+#         )
+        
+#         if not subscriptions.data:
+#             return Response({"error": "No active subscription found."}, status=400)
+        
+#         subscription = subscriptions.data[0]
+        
+#         updated_subscription = stripe.Subscription.modify(
+#             subscription.id,
+#             cancel_at_period_end=True
+#         )
+
+#         # Optional: store the cancel date locally
+#         # user.subscription_cancel_at = timezone.datetime.fromtimestamp(updated_subscription.cancel_at)
+#         # user.save()
+
+#         return Response({
+#             "message": "Subscription will be canceled at the end of the billing period.",
+#             "cancel_at": updated_subscription.cancel_at
+#         })
+#     except Exception as e:
+#         return Response({"error": f"Cancellation failed: {str(e)}"}, status=400)
 
 
 @api_view(["POST"])
@@ -319,3 +452,205 @@ def create_one_time_payment_session(request):
 #             print(f"User with customer ID {customer_id} not found.")
 
 #     return HttpResponse(status=200)
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_subscription_status(request):
+    user = request.user
+
+    try:
+        if not user.stripe_customer_id:
+            return Response({
+                "is_subscribed": False,
+                "subscription_type": None,
+                "subscription_start": None,
+                "subscription_end": None
+            })
+
+        stripe_subs = stripe.Subscription.list(
+            customer=user.stripe_customer_id,
+            status='active',
+            limit=1
+        )
+
+        if not stripe_subs.get('data'):
+            return Response({
+                "is_subscribed": False,
+                "subscription_type": None,
+                "subscription_start": None,
+                "subscription_end": None
+            })
+
+        subscription = stripe_subs['data'][0]
+
+        # ✅ Corrected access to current_period_end
+        current_period_end = subscription['items']['data'][0]['current_period_end']
+
+        user.update_subscription({
+            'customer_id': user.stripe_customer_id,
+            'subscription_type': user.subscription_type,
+            'start_date': user.subscription_start,
+            'end_date': timezone.datetime.fromtimestamp(current_period_end),
+            'is_active': True
+        })
+
+        return Response(user.get_subscription_status())
+
+    except Exception as e:
+        print("Error in get_subscription_status:", str(e))
+        return Response({"error": str(e)}, status=400)
+
+# @api_view(["GET"])
+# @permission_classes([IsAuthenticated])
+# def get_subscription_status(request):
+#     user = request.user
+#     try:
+#         if not user.stripe_customer_id:
+#             print("User has no stripe_customer_id")
+#             return Response({
+#                 "is_subscribed": False,
+#                 "subscription_type": None,
+#                 "subscription_start": None,
+#                 "subscription_end": None
+#             })
+        
+#         # Get the customer's subscriptions from Stripe
+#         subscriptions = stripe.Subscription.list(
+#             customer=user.stripe_customer_id,
+#             status='active',
+#             limit=1
+#         )
+        
+#         print("Stripe API response:", subscriptions)
+        
+#         if not subscriptions.data:
+#             print("No active subscriptions found in Stripe")
+#             return Response({
+#                 "is_subscribed": False,
+#                 "subscription_type": None,
+#                 "subscription_start": None,
+#                 "subscription_end": None
+#             })
+        
+#         subscription = subscriptions.data[0]
+        
+#         # Extract current_period_end from the subscription item
+#         current_period_end = subscription.items.data[0].current_period_end
+        
+#         # Update user's subscription data if needed
+#         user.update_subscription({
+#             'customer_id': user.stripe_customer_id,
+#             'subscription_type': user.subscription_type,
+#             'start_date': user.subscription_start,
+#             'end_date': timezone.datetime.fromtimestamp(current_period_end),
+#             'is_active': True
+#         })
+        
+#         print("User subscription data after update:", user.get_subscription_status())
+        
+#         return Response(user.get_subscription_status())
+#     except Exception as e:
+#         print("Error in get_subscription_status:", str(e))
+#         return Response({"error": str(e)}, status=400)
+
+
+# @api_view(["POST"])
+# @permission_classes([IsAuthenticated])
+# def cancel_subscription(request):
+#     user = request.user
+#     try:
+#         if not user.stripe_customer_id:
+#             return Response({"error": "No active subscription found"}, status=400)
+        
+#         # Get the customer's active subscription
+#         subscriptions = stripe.Subscription.list(
+#             customer=user.stripe_customer_id,
+#             status='active',
+#             limit=1
+#         )
+        
+#         if not subscriptions.data:
+#             return Response({"error": "No active subscription found"}, status=400)
+        
+#         subscription = subscriptions.data[0]
+        
+#         # Cancel the subscription at period end
+#         updated_subscription = stripe.Subscription.modify(
+#             subscription.id,
+#             cancel_at_period_end=True
+#         )
+        
+#         return Response({
+#             "message": "Subscription will be canceled at the end of the billing period",
+#             "cancel_at": updated_subscription.cancel_at
+#         })
+#     except Exception as e:
+#         return Response({"error": str(e)}, status=400)
+
+# @api_view(["POST"])
+# @permission_classes([IsAuthenticated])
+# def reactivate_subscription(request):
+#     user = request.user
+#     try:
+#         if not user.stripe_customer_id:
+#             return Response({"error": "No subscription found"}, status=400)
+        
+#         # Get the customer's subscription
+#         subscriptions = stripe.Subscription.list(
+#             customer=user.stripe_customer_id,
+#             status='active',
+#             limit=1
+#         )
+        
+#         if not subscriptions.data:
+#             return Response({"error": "No active subscription found"}, status=400)
+        
+#         subscription = subscriptions.data[0]
+        
+#         # Reactivate the subscription
+#         updated_subscription = stripe.Subscription.modify(
+#             subscription.id,
+#             cancel_at_period_end=False
+#         )
+        
+#         return Response({
+#             "message": "Subscription reactivated successfully",
+#             "subscription": {
+#                 "id": updated_subscription.id,
+#                 "status": updated_subscription.status,
+#                 "current_period_end": updated_subscription.current_period_end
+#             }
+#         })
+#     except Exception as e:
+#         return Response({"error": str(e)}, status=400)
+
+# @api_view(["GET"])
+# @permission_classes([IsAuthenticated])
+# def get_subscription_history(request):
+    user = request.user
+    try:
+        if not user.stripe_customer_id:
+            return Response({"error": "No subscription history found"}, status=400)
+        
+        # Get all subscriptions for the customer
+        subscriptions = stripe.Subscription.list(
+            customer=user.stripe_customer_id,
+            limit=10  # Limit to last 10 subscriptions
+        )
+        
+        subscription_history = []
+        for sub in subscriptions.data:
+            subscription_history.append({
+                "id": sub.id,
+                "status": sub.status,
+                "start_date": sub.start_date,
+                "current_period_start": sub.current_period_start,
+                "current_period_end": sub.current_period_end,
+                "canceled_at": sub.canceled_at,
+                "ended_at": sub.ended_at
+            })
+        
+        return Response({
+            "subscription_history": subscription_history
+        })
+    except Exception as e:
+        return Response({"error": str(e)}, status=400)
