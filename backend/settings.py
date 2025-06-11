@@ -46,6 +46,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",
     "https://pawclix.com",
+    "https://www.pawclix.com",
 ]
 
 #CORS_ALLOW_ALL_ORIGINS = True  # ✅ For development only
@@ -62,22 +63,33 @@ CORS_ALLOW_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
+    'access-control-allow-origin',
+    'access-control-allow-headers',
+    'access-control-allow-methods',
 ]
 
 CORS_ALLOW_METHODS = [
-    'GET', 'POST', 'OPTIONS', 'PUT', 'PATCH', 'DELETE'
+    'GET',
+    'POST',
+    'PUT',
+    'PATCH',
+    'DELETE',
+    'OPTIONS'
 ]
 
 CORS_EXPOSE_HEADERS = [
     'authorization',  # Optional: only needed if you expect to read it in JavaScript
     'x-csrftoken',
-    
+    'content-type',
+    'access-control-allow-origin',
+    'access-control-allow-headers',
+    'access-control-allow-methods',
 ]
-CORS_ALLOW_HEADERS = [
-    "authorization",
-    "content-type",
-    "x-requested-with"
-]
+
+# Additional CORS settings
+CORS_PREFLIGHT_MAX_AGE = 86400  # 24 hours
+CORS_REPLACE_HTTPS_REFERER = True
+
 # Application definition
 
 INSTALLED_APPS = [
