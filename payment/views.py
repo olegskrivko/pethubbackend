@@ -123,3 +123,120 @@ def stripe_webhook(request):
         print(f"Unhandled event type: {event_type}")
 
     return HttpResponse(status=200)  # Respond to acknowledge the event
+
+
+
+### NEW
+# @api_view(["POST"])
+# @permission_classes([IsAuthenticated])
+# def create_subscription_session(request):
+#     user = request.user
+#     subscription_type = request.data.get('subscription_type', 'plus')  # Default to 'plus' if not specified
+    
+#     if subscription_type not in settings.STRIPE_SUBSCRIPTION_PRICE_IDS:
+#         return Response({"error": "Invalid subscription type"}, status=400)
+
+#     try:
+#         checkout_session = stripe.checkout.Session.create(
+#             payment_method_types=["card"],
+#             customer_email=user.email,
+#             line_items=[
+#                 {
+#                     "price": settings.STRIPE_SUBSCRIPTION_PRICE_IDS[subscription_type],
+#                     "quantity": 1,
+#                 }
+#             ],
+#             mode="subscription",
+#             success_url=f"{DOMAIN_APP_URL}/subscription-success",
+#             cancel_url=f"{DOMAIN_APP_URL}/subscription-cancel",
+#             metadata={
+#                 "subscription_type": subscription_type,  # Add metadata to track subscription type
+#                 "user_id": user.id
+#             }
+#         )
+#         return JsonResponse({"url": checkout_session.url})
+#     except Exception as e:
+#         return Response({"error": str(e)}, status=400)
+
+
+# @csrf_exempt
+# def stripe_webhook(request):
+#     payload = request.body
+#     sig_header = request.headers.get("Stripe-Signature")
+    
+#     try:
+#         event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
+#     except ValueError as e:
+#         print(f"Invalid payload: {str(e)}")
+#         return HttpResponse("Invalid payload", status=400)
+#     except stripe.error.SignatureVerificationError as e:
+#         print(f"Signature verification failed: {str(e)}")
+#         return HttpResponse("Signature verification failed", status=400)
+
+#     event_type = event.get('type')
+    
+#     if event_type == 'checkout.session.completed':
+#         session = event['data']['object']
+#         customer_email = session.get('customer_email')
+#         subscription_type = session.get('metadata', {}).get('subscription_type', 'plus')
+
+#         if session['mode'] == 'subscription':
+#             try:
+#                 user = User.objects.get(email=customer_email)
+#                 user.is_subscribed = True
+#                 user.subscription_start = timezone.now()
+#                 user.stripe_customer_id = session.get('customer')
+#                 user.subscription_type = subscription_type  # Use the subscription type from metadata
+#                 user.save()
+#                 print(f"User {user.email} subscribed to {subscription_type} tier successfully.")
+#             except User.DoesNotExist:
+#                 print(f"User with email {customer_email} not found.")
+
+#     elif event_type == 'customer.subscription.updated':
+#         # Handle subscription updates (e.g., plan changes)
+#         subscription = event['data']['object']
+#         customer_id = subscription.get('customer')
+#         try:
+#             user = User.objects.get(stripe_customer_id=customer_id)
+#             # Update subscription status based on the new plan
+#             user.subscription_type = subscription.get('metadata', {}).get('subscription_type', 'plus')
+#             user.save()
+#         except User.DoesNotExist:
+#             print(f"User with customer ID {customer_id} not found.")
+
+#     elif event_type == 'customer.subscription.deleted':
+#         # Handle subscription cancellations
+#         subscription = event['data']['object']
+#         customer_id = subscription.get('customer')
+#         try:
+#             user = User.objects.get(stripe_customer_id=customer_id)
+#             user.is_subscribed = False
+#             user.subscription_type = None
+#             user.save()
+#         except User.DoesNotExist:
+#             print(f"User with customer ID {customer_id} not found.")
+
+#     return HttpResponse(status=200)
+
+### frontend
+# // Example frontend code
+# const createSubscription = async (subscriptionType) => {
+#   try {
+#     const response = await fetch('/api/payment/create-subscription/', {
+#       method: 'POST',
+#       headers: {
+#         'Content-Type': 'application/json',
+#         'Authorization': `Bearer ${token}`
+#       },
+#       body: JSON.stringify({
+#         subscription_type: subscriptionType // 'plus' or 'premium'
+#       })
+#     });
+#     const data = await response.json();
+#     if (data.url) {
+#       window.location.href = data.url;
+#     }
+#   } catch (error) {
+#     console.error('Error:', error);
+#   }
+# };
