@@ -38,12 +38,15 @@ DEBUG = True
 ALLOWED_HOSTS = ["*"]
 
 # For development, you can allow all origins (not recommended for production)
-CORS_ALLOW_ALL_ORIGINS = True
+#CORS_ALLOW_ALL_ORIGINS = True
+
 # Or restrict to specific domains
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:3000",
-#     "https://yourfrontenddomain.com",
-# ]
+CORS_ALLOWED_ORIGINS = [
+    "https://pawclix.netlify.app",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://pawclix.com",
+]
 
 #CORS_ALLOW_ALL_ORIGINS = True  # ✅ For development only
 CORS_ALLOW_CREDENTIALS = True  # ✅ Required when sending JWT in headers (or using cookies)
@@ -235,9 +238,9 @@ DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 # Configure JWT token behavior for authentication
 
 SIMPLE_JWT = {
-    # Access token lifetime: short-lived for better security (15 minutes)
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
-    # Refresh token lifetime: allows user to get new access tokens (7 days)
+    # Access token lifetime: short-lived for better security (minutes=15)
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
+    # Refresh token lifetime: allows user to get new access tokens (days=7)
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     # Enable rotating refresh tokens: issue a new refresh token on each refresh
     'ROTATE_REFRESH_TOKENS': True,
