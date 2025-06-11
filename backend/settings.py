@@ -38,15 +38,15 @@ DEBUG = True
 ALLOWED_HOSTS = ["*"]
 
 # For development, you can allow all origins (not recommended for production)
-#CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = True
 
 # Or restrict to specific domains
-CORS_ALLOWED_ORIGINS = [
-    "https://pawclix.netlify.app",
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "https://pawclix.com",
-]
+# CORS_ALLOWED_ORIGINS = [
+#     "https://pawclix.netlify.app",
+#     "http://localhost:3000",
+#     "http://localhost:5173",
+#     "https://pawclix.com",
+# ]
 
 #CORS_ALLOW_ALL_ORIGINS = True  # ✅ For development only
 CORS_ALLOW_CREDENTIALS = True  # ✅ Required when sending JWT in headers (or using cookies)
@@ -62,9 +62,8 @@ CORS_ALLOW_METHODS = [
 ]
 
 CORS_EXPOSE_HEADERS = [
-    'Authorization',  # Optional: only needed if you expect to read it in JavaScript
-    'X-CSRFTOKEN',
-    'content-type',
+    'authorization',  # Optional: only needed if you expect to read it in JavaScript
+    'x-csrftoken',
 ]
 
 # Application definition
@@ -78,8 +77,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     # Installed APPs
-    'rest_framework',
     'corsheaders',
+    'rest_framework',
     'webpush',
     'cloudinary',
     'cloudinary_storage',
@@ -99,8 +98,9 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'whitenoise.middleware.WhiteNoiseMiddleware', 
     'corsheaders.middleware.CorsMiddleware', # Handles CORS headers
+    'whitenoise.middleware.WhiteNoiseMiddleware', 
+
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
