@@ -91,7 +91,10 @@ class PetSerializer(serializers.ModelSerializer):
     status = serializers.IntegerField(required=True)
      # This will return the human-readable value for the status
     status_display = serializers.CharField(source='get_status_display', read_only=True)
-
+    
+    final_status = serializers.IntegerField(required=True)
+    final_status_display = serializers.CharField(source='get_final_status_display', read_only=True)
+    
     class Meta:
         model = Pet
         #fields = ['id', 'name']

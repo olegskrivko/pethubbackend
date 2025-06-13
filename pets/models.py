@@ -66,6 +66,16 @@ class Pet(models.Model):
         (372, 'EE (+372)'), # Estonia
     ]
 
+    FINAL_STATUS_CHOICES = [
+        (1, 'Nav atrisināts'),           # Open / No Update
+        (2, 'Atgriezts saimniekam'),     # Reunited with Owner
+        (3, 'Nodots patversmei'),        # Taken to Shelter
+        (4, 'Joprojām tiek meklēts'),    # Still Missing / Owner Still Searching
+        (5, 'Nav aktuāli'),              # No Longer Relevant
+        (6, 'Atradies miris'),           # Deceased
+        (7, 'Saimnieks neatrasts'),      # Owner Not Found
+    ]
+
     name = models.CharField(max_length=100, blank=True, null=True, verbose_name="Vārds")
     identifier = models.CharField(max_length=255, blank=True, null=True, verbose_name="ID")
     behavior = models.IntegerField(choices=BEHAVIOR_CHOICES, blank=True, null=True, verbose_name="Uzvedība")
@@ -95,6 +105,8 @@ class Pet(models.Model):
     is_public = models.BooleanField(default=True, verbose_name="Vai ir publisks?")
     is_verified = models.BooleanField(default=False, verbose_name="Vai ir pārbaudīts?")
 
+
+    final_status = models.IntegerField(choices=FINAL_STATUS_CHOICES, default=1, verbose_name="Galīgais statuss")
     # pet_image = models.URLField(max_length=255, blank=False, null=False, verbose_name="Mājdzīvnieka attēls")
 
 
