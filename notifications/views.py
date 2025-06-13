@@ -15,6 +15,9 @@ from rest_framework.permissions import IsAuthenticated
 import requests
 import logging
 from pywebpush import webpush, WebPushException
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
 vapid_private_key = settings.WEBPUSH_SETTINGS.get("VAPID_PRIVATE_KEY")
 
@@ -74,24 +77,7 @@ class PushSubscriptionViewSet(viewsets.ModelViewSet):
         )
 
     
-    # Custom action for subscribing (this is already handled by DRF's ModelViewSet `create` method)
-    # @action(detail=False, methods=['post'], permission_classes=[IsAuthenticatedOrReadOnly])
-    # def subscribe(self, request):
-    #     """
-    #     Handle the subscription logic (saving the subscription).
-    #     """
-    #     if not request.user.is_authenticated:
-    #         return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
 
-    #     subscription_data = request.data
-    #     subscription = PushSubscription(
-    #         user=request.user,
-    #         endpoint=subscription_data['endpoint'],
-    #         p256dh=subscription_data['p256dh'],
-    #         auth=subscription_data['auth']
-    #     )
-    #     subscription.save()
-    #     return Response({"message": "Subscription saved!"}, status=status.HTTP_201_CREATED)
 
 
     # Custom action for unsubscribing (removes the subscription from the database)
@@ -195,3 +181,75 @@ class PushSubscriptionViewSet(viewsets.ModelViewSet):
         exists = PushSubscription.objects.filter(user=request.user, endpoint=endpoint).exists()
         print("exists", exists)
         return Response({"subscribed": exists}, status=status.HTTP_200_OK)
+    
+
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated], url_path='user-location')
+    def user_location(self, request):
+        user = request.user
+
+        # Get the latest PushSubscription for the user (by created_at, or any other logic)
+        subscription = (
+            PushSubscription.objects.filter(user=user)
+            .order_by('-created_at')  # Or use .last() if you prefer
+            .first()
+        )
+
+        if subscription:
+            data = {
+                'lat': subscription.lat,
+                'lon': subscription.lon,
+                'distance': subscription.distance,
+            }
+        else:
+            # Fallback if user has no subscriptions
+            data = {
+                'lat': 56.946285,
+                'lon': 24.105078,
+                'distance': 5.0,
+            }
+
+        return Response(data, status=status.HTTP_200_OK)
+    
+    # Add this inside PushSubscriptionViewSet
+    # @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    # def user_location(self, request):
+    #     """
+    #     Return the most recent PushSubscription's location for the current user.
+    #     """
+    #     subscription = (
+    #         PushSubscription.objects
+    #         .filter(user=request.user)
+    #         .order_by('-created_at')
+    #         .first()
+    #     )
+
+    #     if not subscription:
+    #         return Response({"error": "No subscription found."}, status=404)
+
+    #     return Response({
+    #         "lat": subscription.lat,
+    #         "lon": subscription.lon,
+    #         "distance": subscription.distance,
+    #         "endpoint": subscription.endpoint
+    #     })
+    
+
+        # Custom action for subscribing (this is already handled by DRF's ModelViewSet `create` method)
+    # @action(detail=False, methods=['post'], permission_classes=[IsAuthenticatedOrReadOnly])
+    # def subscribe(self, request):
+    #     """
+    #     Handle the subscription logic (saving the subscription).
+    #     """
+    #     if not request.user.is_authenticated:
+    #         return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+    #     subscription_data = request.data
+    #     subscription = PushSubscription(
+    #         user=request.user,
+    #         endpoint=subscription_data['endpoint'],
+    #         p256dh=subscription_data['p256dh'],
+    #         auth=subscription_data['auth']
+    #     )
+    #     subscription.save()
+    #     return Response({"message": "Subscription saved!"}, status=status.HTTP_201_CREATED)
