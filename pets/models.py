@@ -131,14 +131,17 @@ class PetSightingHistory(models.Model):
     ]
 
     status = models.IntegerField(choices=STATUS_CHOICES, default=2, verbose_name="Statuss")
-    event_occurred_at = models.DateTimeField(default=timezone.now, blank=True, null=True, verbose_name="Notikuma laiks")
+    #event_occurred_at = models.DateTimeField(default=timezone.now, blank=True, null=True, verbose_name="Notikuma laiks")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ziņots")
     pet = models.ForeignKey('Pet', on_delete=models.CASCADE, related_name='sightings_history')
-    latitude = models.DecimalField(max_digits=9, decimal_places=6, verbose_name="Ģeogrāfiskais platums")
-    longitude = models.DecimalField(max_digits=9, decimal_places=6, verbose_name="Ģeogrāfiskais garums")
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name="Ģeogrāfiskais platums")
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name="Ģeogrāfiskais garums")
+
+    # latitude = models.DecimalField(max_digits=9, decimal_places=6, verbose_name="Ģeogrāfiskais platums")
+    # longitude = models.DecimalField(max_digits=9, decimal_places=6, verbose_name="Ģeogrāfiskais garums")
     reporter = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name="Ziņotājs")
     notes = models.TextField(blank=True, null=True, verbose_name="Piezīmes")
-    pet_image = models.URLField(max_length=255, null=False, blank=False, verbose_name="Mājdzīvnieka attēls")
+    pet_image = models.URLField(max_length=255, null=True, blank=True, verbose_name="Mājdzīvnieka attēls")
     is_public = models.BooleanField(default=True, verbose_name="Vai ir publisks?")
     is_verified = models.BooleanField(default=False, verbose_name="Vai ir pārbaudīts?")
 

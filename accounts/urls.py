@@ -5,6 +5,7 @@ urlpatterns = [
     # Pets owned by the authenticated user
     path('user-pets/', views.UserPetsView.as_view(), name='user_pets'),
     path('user-pets/<int:pet_id>/delete/', views.DeletePetView.as_view(), name='delete_pet'),
+    path('user-pets/<int:pet_id>/update/', views.UpdatePetStatusView.as_view(), name='update_pet_status'),
     # Services owned by the authenticated user
     path('user-services/', views.UserServicesView.as_view(), name='user_services'),
     path('user-services/<int:service_id>/delete/', views.DeleteServiceView.as_view(), name='delete_service'),

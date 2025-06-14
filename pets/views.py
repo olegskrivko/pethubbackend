@@ -318,20 +318,6 @@ class PetSightingView(APIView):
         notes = request.data.get('notes', '')
         reporter = request.user
 
-        # Get and process date/time
-        date = request.data.get("date")  # e.g., "2025-04-01"
-        time = request.data.get("time")  # e.g., "14:30"
-
-        if date and time:
-            try:
-                combined_datetime_str = f"{date} {time}"
-                event_occurred_at = datetime.strptime(combined_datetime_str, "%Y-%m-%d %H:%M")
-                event_occurred_at = timezone.make_aware(event_occurred_at)  # Convert to timezone-aware
-            except ValueError:
-                return Response({"error": "Invalid date or time format"}, status=status.HTTP_400_BAD_REQUEST)
-        else:
-            event_occurred_at = timezone.now()  # Default to now if missing
-
         # Validate `status`
         try:
             status_value = int(status_value)
@@ -340,16 +326,6 @@ class PetSightingView(APIView):
         except (ValueError, TypeError):
             return Response({"error": "Invalid status format"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Validate latitude/longitude
-        if latitude and longitude:
-            try:
-                latitude = Decimal(latitude)
-                longitude = Decimal(longitude)
-            except (InvalidOperation, ValueError):
-                return Response({"error": "Invalid latitude or longitude format"}, status=status.HTTP_400_BAD_REQUEST)
-        else:
-            return Response({"error": "Latitude and longitude are required"}, status=status.HTTP_400_BAD_REQUEST)
-
         # Handle image upload (if provided)
         image_url = None
         image = request.FILES.get('image')
@@ -357,17 +333,42 @@ class PetSightingView(APIView):
             uploaded_image = cloudinary.uploader.upload(image)
             image_url = uploaded_image.get("secure_url")
 
+
+        # Validate latitude/longitude only if provided
+        if latitude is not None and longitude is not None:
+            try:
+                latitude = Decimal(latitude)
+                longitude = Decimal(longitude)
+                if not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
+                    return Response({"error": "Latitude must be between -90 and 90 and longitude between -180 and 180."}, status=status.HTTP_400_BAD_REQUEST)
+            except (InvalidOperation, ValueError):
+                return Response({"error": "Invalid latitude or longitude format"}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            # If no coordinates provided, require at least image or notes to be present
+            if not image_url and not notes:
+                return Response({"error": "Either coordinates, an image, or notes must be provided."}, status=status.HTTP_400_BAD_REQUEST)
+        # Validate latitude/longitude
+        # if latitude and longitude:
+        #     try:
+        #         latitude = Decimal(latitude)
+        #         longitude = Decimal(longitude)
+        #     except (InvalidOperation, ValueError):
+        #         return Response({"error": "Invalid latitude or longitude format"}, status=status.HTTP_400_BAD_REQUEST)
+        # else:
+        #     return Response({"error": "Latitude and longitude are required"}, status=status.HTTP_400_BAD_REQUEST)
+
         # Save the pet sighting in the database
         sighting = PetSightingHistory.objects.create(
             pet=pet,
             status=status_value,
-            latitude=latitude,
-            longitude=longitude,
-            event_occurred_at=event_occurred_at,
+            latitude=latitude if latitude is not None else None,
+            longitude=longitude if longitude is not None else None,
+            # event_occurred_at=event_occurred_at,
             notes=notes,
             reporter=reporter,
             pet_image=image_url
         )
+
 
         # Return success response
         return Response({
@@ -376,7 +377,7 @@ class PetSightingView(APIView):
             "status": sighting.get_status_display(),
             "latitude": sighting.latitude,
             "longitude": sighting.longitude,
-            "event_occurred_at": sighting.event_occurred_at,
+            # "event_occurred_at": sighting.event_occurred_at,
             "notes": sighting.notes,
             "image": sighting.pet_image,
             "reporter": sighting.reporter.id,

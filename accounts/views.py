@@ -26,6 +26,24 @@ class UserPetsView(APIView):
         
         return Response(serializer.data, status=status.HTTP_200_OK)
     
+class UpdatePetStatusView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pet_id):
+        try:
+            pet = Pet.objects.get(id=pet_id, author=request.user)
+        except Pet.DoesNotExist:
+            return Response({'error': 'Pet not found or not authorized'}, status=status.HTTP_404_NOT_FOUND)
+
+        data = request.data
+        serializer = PetSerializer(pet, data=data, partial=True)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
 class UserServicesView(APIView):
     permission_classes = [IsAuthenticated]  # Ensure the user is authenticated
 

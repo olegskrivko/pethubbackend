@@ -20,7 +20,7 @@ class PetSightingHistorySerializer(serializers.ModelSerializer):
     #image_url = serializers.SerializerMethodField()  # ✅ Fix: Use `SerializerMethodField`
     pet_image = serializers.CharField(required=False, allow_blank=True)  # ✅ Accepts empty values
     pet = serializers.PrimaryKeyRelatedField(queryset=Pet.objects.all())  # ✅ Ensure `pet` exists
-    event_occurred_at = serializers.DateTimeField(required=False, allow_null=True)  # ✅ Ensure it's an aware datetime
+    #event_occurred_at = serializers.DateTimeField(required=False, allow_null=True)  # ✅ Ensure it's an aware datetime
     class Meta:
         model = PetSightingHistory
         fields = '__all__' 
@@ -31,28 +31,55 @@ class PetSightingHistorySerializer(serializers.ModelSerializer):
     #     """ ✅ Return Cloudinary Image URL for sightings """
     #     return obj.image if obj.image else None
 
-    def validate(self, data):
-        # Check if latitude and longitude are provided and are valid
-        """Ensure latitude and longitude are valid."""
-        latitude = data.get('latitude')
-        longitude = data.get('longitude')
+    # def validate(self, data):
+    #     latitude = data.get('latitude')
+    #     longitude = data.get('longitude')
+    #     pet_image = data.get('pet_image')
+    #     notes = data.get('notes')
 
-        if not latitude or not longitude:
-            raise serializers.ValidationError("Latitude and longitude must be provided.")
-        
-        try:
-            latitude = float(latitude)
-            longitude = float(longitude)
-        except ValueError:
-            raise serializers.ValidationError("Latitude and longitude must be valid numbers.")
+    #     # If latitude or longitude is missing, require pet_image or notes
+    #     if latitude is None or longitude is None:
+    #         if not pet_image and not notes:
+    #             raise serializers.ValidationError(
+    #                 "Either coordinates, an image, or notes must be provided."
+    #             )
+    #     else:
+    #         # Validate latitude and longitude ranges
+    #         try:
+    #             lat = float(latitude)
+    #             lon = float(longitude)
+    #         except (TypeError, ValueError):
+    #             raise serializers.ValidationError("Latitude and longitude must be valid numbers.")
 
-        # Optionally, check for valid ranges
-        if not (-90 <= latitude <= 90):
-            raise serializers.ValidationError("Latitude must be between -90 and 90 degrees.")
-        if not (-180 <= longitude <= 180):
-            raise serializers.ValidationError("Longitude must be between -180 and 180 degrees.")
+    #         if not (-90 <= lat <= 90):
+    #             raise serializers.ValidationError("Latitude must be between -90 and 90 degrees.")
+    #         if not (-180 <= lon <= 180):
+    #             raise serializers.ValidationError("Longitude must be between -180 and 180 degrees.")
+
+    #     return data
+
+    # def validate(self, data):
+    #     # Check if latitude and longitude are provided and are valid
+    #     """Ensure latitude and longitude are valid."""
+    #     latitude = data.get('latitude')
+    #     longitude = data.get('longitude')
+
+    #     if not latitude or not longitude:
+    #         raise serializers.ValidationError("Latitude and longitude must be provided.")
         
-        return data
+    #     try:
+    #         latitude = float(latitude)
+    #         longitude = float(longitude)
+    #     except ValueError:
+    #         raise serializers.ValidationError("Latitude and longitude must be valid numbers.")
+
+    #     # Optionally, check for valid ranges
+    #     if not (-90 <= latitude <= 90):
+    #         raise serializers.ValidationError("Latitude must be between -90 and 90 degrees.")
+    #     if not (-180 <= longitude <= 180):
+    #         raise serializers.ValidationError("Longitude must be between -180 and 180 degrees.")
+        
+    #     return data
 
 
 class PetSerializer(serializers.ModelSerializer):
