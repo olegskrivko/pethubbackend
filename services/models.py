@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 # from core.models import SocialMedia
 from django.conf import settings
 from django.db.models import Avg
+#from django.contrib.gis.db import models as geomodels
 User = get_user_model()
     
 class Service(models.Model):
@@ -51,7 +52,7 @@ class Service(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True) 
     is_available = models.BooleanField(default=True)
-    provider_type = models.IntegerField(choices=PROVIDER_TYPES)
+    provider = models.IntegerField(choices=PROVIDER_TYPES)
     service_image_1 = models.URLField(max_length=255, null=False, blank=False, verbose_name="Servisa 1. attēls")
     service_image_2 = models.URLField(max_length=255, null=True, blank=True, verbose_name="Servisa 2. attēls")
     service_image_3 = models.URLField(max_length=255, null=True, blank=True, verbose_name="Servisa 3. attēls")
@@ -94,7 +95,8 @@ class Location(models.Model):
     full_address = models.TextField(blank=True, null=True, verbose_name="Adrese")  # Optional, for storing formatted address
     latitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True, verbose_name="Ģeogrāfiskais platums")
     longitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True, verbose_name="Ģeogrāfiskais garums")
-
+    #address = models.TextField(blank=True, null=True)
+    #point = geomodels.PointField(geography=True, blank=True, null=True)  # replaces lat/lng
     def __str__(self):
         return f'{self.service.title} - {self.city}'
     

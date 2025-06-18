@@ -63,8 +63,9 @@ class ServiceSerializer(serializers.ModelSerializer):
     # locations = LocationSerializer(many=True)
     user = serializers.ReadOnlyField(source='user.username')  # Optional: Display username
     category_display = serializers.CharField(source='get_category_display', read_only=True)  # 👈 Add this
-    provider_type_display = serializers.CharField(source='get_provider_type_display', read_only=True)
+    provider_display = serializers.CharField(source='get_provider_display', read_only=True)
     price_type_display = serializers.CharField(source='get_price_type_display', read_only=True)
+    
     service_image_1 = serializers.URLField(required=False, allow_blank=True)
     service_image_2 = serializers.URLField(required=False, allow_blank=True)
     service_image_3 = serializers.URLField(required=False, allow_blank=True)

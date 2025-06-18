@@ -21,12 +21,5 @@ urlpatterns = [
     # Getting and removing favorites from user profile
     path('favorite-services/', views.GetFavoritedServices.as_view(), name='get_favorited_services'),  # GET all favorited services
     path('favorite-services/<int:service_id>/remove/', views.UnfavoriteServiceView.as_view(), name='unfavorite_service'),  # DELETE
-
-    # Route to get pets that are favorited by the user
-    # path('favorited-pets/', views.GetFavoritedPets.as_view(), name='get_favorited_pets'),
-    # path('favorited-pets/<int:pet_id>/delete/', views.UnfavoritePetView.as_view(), name='unfavorite_pet'),
-
-    
-    
     
 ]

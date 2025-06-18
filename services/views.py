@@ -7,7 +7,8 @@ from .models import Service,  Review #WorkingHour, Location,
 from .serializers import ServiceSerializer, ReviewSerializer
 import cloudinary.uploader
 from rest_framework import status
-
+# from django.contrib.gis.geos import Point
+# from django.contrib.gis.db.models.functions import Distance
 # from .filters import ServiceFilter
 # Add this at the top if you haven't already
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -27,7 +28,10 @@ from rest_framework.exceptions import ValidationError
 import json
 from .models import Service, Location
 User = get_user_model()
-
+# user_location = Point(user_lng, user_lat)
+# services = Location.objects.annotate(
+#     distance=Distance('point', user_location)
+# ).filter(distance__lte=5000).order_by('distance')  # services within 5km
 class ServicePagination(PageNumberPagination):
     page_size = 6
     page_size_query_param = 'page_size'
@@ -43,6 +47,7 @@ class ServicePagination(PageNumberPagination):
 
 class ServiceFilter(filters.FilterSet):
     category = filters.NumberFilter(field_name='category', lookup_expr='exact')
+    provider = filters.NumberFilter(field_name='provider', lookup_expr='exact')
     search = filters.CharFilter(method='filter_by_search', label='Search')
 
     def filter_by_search(self, queryset, name, value):
@@ -56,7 +61,7 @@ class ServiceFilter(filters.FilterSet):
 
     class Meta:
         model = Service
-        fields = ['search', 'category']
+        fields = ['search', 'category', 'provider']
 
 class ServiceViewSet(viewsets.ModelViewSet):
     queryset = Service.objects.all().order_by('-created_at')
