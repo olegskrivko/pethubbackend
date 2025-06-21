@@ -9,7 +9,7 @@ User = get_user_model()
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'username', 'email']  # Include fields you want to display
+        fields = ['id', 'username', 'email', 'avatar']  # Include fields you want to display
 
 class PetSightingHistorySerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display')
