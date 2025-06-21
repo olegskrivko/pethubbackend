@@ -40,7 +40,7 @@ from math import radians, sin, cos, sqrt, atan2
 from django.http import JsonResponse
 from django.conf import settings
 from notifications.models import PushSubscription
-
+from rest_framework.pagination import PageNumberPagination
 from notifications.utils import send_push_notification  # Import the push notification function
 def calculate_distance(lat1, lon1, lat2, lon2):
     # Radius of the Earth in kilometers
@@ -298,11 +298,93 @@ class PetViewSet(viewsets.ModelViewSet):
 #         'used': current_count,
 #         'remaining': pet_limit - current_count
 #     })
+
+class PetSightingPagination(PageNumberPagination):
+    page_size = 3
+    page_size_query_param = 'page_size'
+
+# class PetSightingView(APIView):
+#     """
+#     Handles creating pet sighting entry (POST), listing pet sightings (GET), and deleting a sighting (DELETE)
+#     """
+#     permission_classes = [IsAuthenticatedOrReadOnly]
+
+#     def get(self, request, id):
+#         # List paginated pet sightings for a specific pet
+#         pet = get_object_or_404(Pet, id=id)
+#         sightings = PetSightingHistory.objects.filter(pet=pet).order_by('-created_at')
+
+#         paginator = PetSightingPagination()
+#         page = paginator.paginate_queryset(sightings, request)
+#         serializer = PetSightingHistorySerializer(page, many=True)
+
+#         return paginator.get_paginated_response(serializer.data)
+
+#     def post(self, request, id):
+#         # Create a new pet sighting entry
+#         pet = get_object_or_404(Pet, id=id)
+
+#         status_value = request.data.get('status')
+#         latitude = request.data.get('latitude')
+#         longitude = request.data.get('longitude')
+#         notes = request.data.get('notes', '')
+#         reporter = request.user
+
+#         # Validate `status`
+#         try:
+#             status_value = int(status_value)
+#             if status_value not in dict(PetSightingHistory.STATUS_CHOICES):
+#                 return Response({"error": "Invalid status value"}, status=status.HTTP_400_BAD_REQUEST)
+#         except (ValueError, TypeError):
+#             return Response({"error": "Invalid status format"}, status=status.HTTP_400_BAD_REQUEST)
+
+#         # Handle image upload (if provided)
+#         image_url = None
+#         image = request.FILES.get('image')
+#         if image:
+#             uploaded_image = cloudinary.uploader.upload(image)
+#             image_url = uploaded_image.get("secure_url")
+
+#         # Validate latitude/longitude only if provided
+#         if latitude is not None and longitude is not None:
+#             try:
+#                 latitude = Decimal(latitude)
+#                 longitude = Decimal(longitude)
+#                 if not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
+#                     return Response({"error": "Latitude must be between -90 and 90 and longitude between -180 and 180."}, status=status.HTTP_400_BAD_REQUEST)
+#             except (InvalidOperation, ValueError):
+#                 return Response({"error": "Invalid latitude or longitude format"}, status=status.HTTP_400_BAD_REQUEST)
+#         else:
+#             # Require at least image or notes if no coordinates
+#             if not image_url and not notes:
+#                 return Response({"error": "Either coordinates, an image, or notes must be provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+#         # Save the pet sighting in the database
+#         sighting = PetSightingHistory.objects.create(
+#             pet=pet,
+#             status=status_value,
+#             latitude=latitude if latitude is not None else None,
+#             longitude=longitude if longitude is not None else None,
+#             notes=notes,
+#             reporter=reporter,
+#             pet_image=image_url
+#         )
+
+#         return Response({
+#             "id": sighting.id,
+#             "pet": sighting.pet.id,
+#             "status": sighting.get_status_display(),
+#             "latitude": sighting.latitude,
+#             "longitude": sighting.longitude,
+#             "notes": sighting.notes,
+#             "image": sighting.pet_image,
+#             "reporter": sighting.reporter.id,
+#         }, status=status.HTTP_201_CREATED)
 class PetSightingView(APIView):
     """Handles creating pet sighting entry (POST), listing pet sightings (GET), and deleting a sighting (DELETE)"""
     permission_classes = [IsAuthenticatedOrReadOnly]
     def get(self, request, id):
-        # List pet sightings for a specific pet
+        # List paginated pet sightings for a specific pet
         pet = get_object_or_404(Pet, id=id)
         sightings = PetSightingHistory.objects.filter(pet=pet)
         serializer = PetSightingHistorySerializer(sightings, many=True)
