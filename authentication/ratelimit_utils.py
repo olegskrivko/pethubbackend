@@ -30,7 +30,7 @@ register_rate_limit = ratelimit_with_custom_response(rate='3/m', method='POST', 
 login_rate_limit = ratelimit_with_custom_response(rate='5/m', method='POST', block=False)
 activate_rate_limit = ratelimit_with_custom_response(rate='5/m', method='GET', block=False)
 feedback_rate_limit = ratelimit_with_custom_response(rate='5/m', method='POST', block=False)
-
+hourly_20_rate_limit = ratelimit_with_custom_response(rate='20/h', method='POST', block=False)
 test_rate_limit = ratelimit_with_custom_response(rate='3/m', method='GET', block=False)
 # The decorator ratelimit automatically tracks requests per the key (here IP address) and rate.
 

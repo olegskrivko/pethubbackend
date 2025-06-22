@@ -1,7 +1,7 @@
 # pets/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import PetViewSet, PetSightingView,  RecentPetsView, PetStatusCountsView,  get_user_pets # get_pet_status_counts   # Import get_user_pets, PetSightingCreate, PetSightingHistoryViewSet,
+from .views import PetViewSet, PetSightingView,  RecentPetsView, PetStatusCountsView,  get_user_pets, pet_post_quota  # get_pet_status_counts   # Import get_user_pets, PetSightingCreate, PetSightingHistoryViewSet,
 
 router = DefaultRouter()
 router.register(r'', PetViewSet)
@@ -13,6 +13,7 @@ urlpatterns = [
     #path('user-pets/', get_user_pets, name='get_user_pets'),  # Fetch pets for the logged-in user
     # path('status-counts/', get_pet_status_counts, name='pet-status-counts'),
     path('status-counts/', PetStatusCountsView.as_view(), name='pet-status-counts'),
+    path('pet-quota/', pet_post_quota, name='pet-post-quota'),
     path('', include(router.urls)),  # Register PetViewSet in the API
     
     #path('<int:id>/pet-sightings/', PetSightingCreate.as_view(), name='create_pet_sighting'),  # New route for pet sightings

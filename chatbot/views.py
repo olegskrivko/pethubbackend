@@ -13,7 +13,9 @@ import os
 from openai import OpenAI
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
 import json
-
+from authentication.ratelimit_utils import (
+hourly_20_rate_limit
+)
 # Load environment variables
 if os.path.exists("/etc/secrets/.env"):
     load_dotenv("/etc/secrets/.env")
@@ -22,7 +24,10 @@ else:
 
 # Initialize OpenAI client
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+
 class ChatBotAPIView(APIView):
+    @hourly_20_rate_limit
     def post(self, request):
         user_input = request.data.get("message", "")
         print("User input:", user_input)
@@ -121,7 +126,8 @@ If it's not a search, return:
         else:
             # Unknown intent fallback
             return Response({"type": "error", "reply": "Sorry, I didn't understand your request."}, status=400)
-
+    
+    @hourly_20_rate_limit
     def search_pets(self, filters):
         print("Applying filters:", filters)
 
@@ -364,6 +370,7 @@ QUESTIONS = [
 class PetRecommendationAPIView(APIView):
     permission_classes = [IsAuthenticated]
     
+    @hourly_20_rate_limit
     def post(self, request, *args, **kwargs):
         print("=== Debug Authentication ===")
         print("Auth header:", request.headers.get('Authorization'))

@@ -158,6 +158,14 @@ class PetViewSet(viewsets.ModelViewSet):
         
         # Optional: you can still customize filtering behavior if needed here, but filterset_class should handle most cases
         return queryset
+    
+    def get_pet_limit(self, user):
+        if getattr(user, "is_subscribed", False):
+            if getattr(user, "subscription_type", "") == 'plus':
+                return 3
+            elif getattr(user, "subscription_type", "") == 'premium':
+                return 5
+        return 1
 
 
     
@@ -166,6 +174,16 @@ class PetViewSet(viewsets.ModelViewSet):
         return super().list(request, *args, **kwargs)
     
     def perform_create(self, serializer):
+        user = self.request.user
+        current_count = Pet.objects.filter(author=user).count()
+        pet_limit = self.get_pet_limit(user)
+        
+
+        if current_count >= pet_limit:
+            raise ValidationError(
+                f"Jūs esat sasniedzis mājdzīvnieku pievienošanas limitu ({pet_limit}). "
+                "Lūdzu, dzēsiet esošu ierakstu vai atjauniniet abonementu."
+            )
 
         uploaded_images = {}
         uploaded_images_list = []  # Store uploaded images in order
@@ -285,19 +303,32 @@ class PetViewSet(viewsets.ModelViewSet):
 
         return JsonResponse({"status": "Notifications sent to nearby users."})
 
-# @api_view(['GET'])
-# @permission_classes([IsAuthenticated])
-# def pet_post_quota(request):
-#     user = request.user
-#     pet_limit = 1  # default
-#     if user.is_subscribed and user.subscription_type == 'plus':
-#         pet_limit = 5
-#     current_count = Pet.objects.filter(author=user).count()
-#     return Response({
-#         'limit': pet_limit,
-#         'used': current_count,
-#         'remaining': pet_limit - current_count
-#     })
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def pet_post_quota(request):
+    user = request.user
+
+    # Default limit for free users
+    pet_limit = 1
+
+    # Adjust based on subscription
+    if getattr(user, "is_subscribed", False):
+        if user.subscription_type == 'plus':
+            pet_limit = 3
+        elif user.subscription_type == 'premium':
+            pet_limit = 5
+
+    # Count how many pets the user has already posted
+    current_count = Pet.objects.filter(author=user).count()
+
+    remaining = max(pet_limit - current_count, 0)
+
+    return Response({
+        'limit': pet_limit,
+        'used': current_count,
+        'remaining': remaining
+    })
 
 class PetSightingPagination(PageNumberPagination):
     page_size = 3
