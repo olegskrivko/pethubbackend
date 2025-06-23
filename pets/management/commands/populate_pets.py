@@ -100,6 +100,9 @@ class Command(BaseCommand):
 
         for _ in range(10):  # Create 10 pets
             author = random.choice(authors)
+            final_status = get_random_choice(Pet.FINAL_STATUS_CHOICES)
+            is_closed = final_status != 1  # Consider only status 1 as open
+
             pet = Pet.objects.create(
                 name=fake.first_name(),
                 identifier=fake.uuid4(),
@@ -117,8 +120,8 @@ class Command(BaseCommand):
                 contact_phone=fake.msisdn()[:8],
                 phone_code=get_random_choice(Pet.PHONE_CODE_CHOICES),
                 breed=fake.word(),
-                latitude = Decimal(random.uniform(55.6, 58.1)),
-                longitude = Decimal(random.uniform(20.9, 28.3)),
+                latitude=Decimal(random.uniform(55.6, 58.1)),
+                longitude=Decimal(random.uniform(20.9, 28.3)),
                 pet_image_1="https://picsum.photos/600/400",
                 pet_image_2="https://picsum.photos/600/400",
                 pet_image_3="https://picsum.photos/600/400",
@@ -126,6 +129,8 @@ class Command(BaseCommand):
                 event_occurred_at=fake.date_time_this_year(),
                 is_public=random.choice([True, False]),
                 is_verified=random.choice([True, False]),
+                final_status=final_status,
+                is_closed=is_closed,
             )
             self.stdout.write(f"✅ Created pet: {pet.name} (ID: {pet.identifier})")
 

@@ -3,10 +3,18 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 import os
+import uuid
+from django.conf import settings
+
+from django.core.mail import EmailMultiAlternatives, send_mail
+from datetime import datetime, timedelta
 from django.utils.timezone import now
-from .serializers import RegisterSerializer, LoginSerializer
+from .serializers import RegisterSerializer, LoginSerializer, ResetPasswordSerializer, ForgotPasswordSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.shortcuts import redirect
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
+
 from django.shortcuts import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 #from .serializers import RegisterSerializer, LoginSerializer, ForgotPasswordSerializer, ResetPasswordSerializer
@@ -95,44 +103,129 @@ def login(request):
 
 
 
-def logout(request: HttpRequest):
-    return JsonResponse({"message": "Logout view"})
+# def logout(request: HttpRequest):
+#     return JsonResponse({"message": "Logout view"})
 
-@forgot_password_rate_limit
-def password_reset(request: HttpRequest):
-    return JsonResponse({"message": "Password reset view"})
+# @forgot_password_rate_limit
+# def password_reset(request: HttpRequest):
+#     return JsonResponse({"message": "Password reset view"})
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def reset_password(request, token):  # ✅ Token must match URLs
+    print("token", token)
+    """Handles password reset using a valid token."""
+    try:
+        user = User.objects.get(password_reset_token=token)
+    except User.DoesNotExist:
+        return Response({"error": "Invalid or expired token."}, status=400)
 
-def password_reset_confirm(request: HttpRequest):
-    return JsonResponse({"message": "Password reset confirm"})
+    # ✅ Check if token is expired
+    if user.password_reset_expires and user.password_reset_expires < now():
+        return Response({"error": "Password reset link has expired."}, status=400)
 
-def change_password(request: HttpRequest):
-    return JsonResponse({"message": "Change password"})
+    # ✅ Update password
+    new_password = request.data.get("password")
+    if not new_password:
+        return Response({"error": "Password is required."}, status=400)
 
+    user.set_password(new_password)
+    user.password_reset_token = None  # ✅ Remove token after use
+    user.password_reset_expires = None
+    user.save()
 
+    return Response(
+        {"message": "Password reset successfully! You can now log in."}, status=200
+    )
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def reset_password(request, token):
+    """Handles password reset using a valid token."""
+    data = request.data.copy()  # ✅ Copy request data
+    data["token"] = token  # ✅ Add `token` from URL to data
+
+    serializer = ResetPasswordSerializer(data=data)
+    if serializer.is_valid():
+        serializer.save()  # ✅ Calls `save()` and updates password
+        return Response(
+            {"message": "Password reset successfully! You can now log in."}, status=200
+        )
+
+    return Response(serializer.errors, status=400)  # 🚨 Send back validation errors
+# def password_reset_confirm(request: HttpRequest):
+#     return JsonResponse({"message": "Password reset confirm"})
+
+# def change_password(request: HttpRequest):
+#     return JsonResponse({"message": "Change password"})
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def forgot_password(request):
+    """Handles password reset requests by sending an email."""
+    email = request.data.get("email")
+
+    if not email:
+        return Response(
+            {"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        user = User.objects.get(email=email)
+    except User.DoesNotExist:
+        return Response(
+            {"error": "No account found with this email."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    # ✅ Generate password reset token
+    user.password_reset_token = str(uuid.uuid4())
+    user.password_reset_expires = now() + timedelta(hours=1)  # Token expires in 1 hour
+    user.save()
+
+    # ✅ Create the reset link
+    reset_url = f"{DOMAIN_APP_URL}/reset-password/{user.password_reset_token}/"
+
+    # ✅ Render HTML email template
+    context = {"reset_url": reset_url, "user": user}
+    html_content = render_to_string(
+        "emails/reset_password.html", context
+    )  # Load email template
+    plain_text_content = strip_tags(html_content)  # Convert HTML to plain text
+
+    # ✅ Send email
+    subject = "Reset Your Password"
+    email_message = EmailMultiAlternatives(
+        subject, plain_text_content, settings.EMAIL_HOST_USER, [user.email]
+    )
+    email_message.attach_alternative(html_content, "text/html")  # Attach HTML version
+    email_message.send()
+
+    return Response(
+        {"message": "Password reset email sent!"}, status=status.HTTP_200_OK
+    )
 
 # DEBUGING
-@test_rate_limit
-def test_view(request):
-    return JsonResponse({"message": "This view is rate limited to 3 requests per minute"})
+# @test_rate_limit
+# def test_view(request):
+#     return JsonResponse({"message": "This view is rate limited to 3 requests per minute"})
 
-@test_rate_limit
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def protected_example(request):
-    user = request.user
-    return Response({
-        "message": "This is a protected route.",
-        "user_email": user.email,
-        "username": user.username
-    })
+# @test_rate_limit
+# @api_view(["GET"])
+# @permission_classes([IsAuthenticated])
+# def protected_example(request):
+#     user = request.user
+#     return Response({
+#         "message": "This is a protected route.",
+#         "user_email": user.email,
+#         "username": user.username
+#     })
 
-@test_rate_limit
-@api_view(["GET"])
-@permission_classes([AllowAny])
-def public_example(request):
-    return Response({
-        "message": "This is a public route. No authentication required."
-    })
+# @test_rate_limit
+# @api_view(["GET"])
+# @permission_classes([AllowAny])
+# def public_example(request):
+#     return Response({
+#         "message": "This is a public route. No authentication required."
+#     })
 
 ### ✅ Get User Details (Authenticated Users Only)
 @api_view(["GET"])
@@ -147,3 +240,38 @@ def get_user_details(request):
         "avatar": user.avatar,
     }, status=status.HTTP_200_OK)
 
+
+
+### ✅ Delete User View (Soft Delete Instead of Permanent Deletion)
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def delete_user(request):
+    """Soft deletes the user account (deactivates it)."""
+    user = request.user
+    user.is_active = False  # ✅ Instead of deleting, deactivate the account
+    user.save()
+    return Response(
+        {"message": "User account deactivated successfully."},
+        status=status.HTTP_204_NO_CONTENT,
+    )
+
+
+### ✅ Logout View (Blacklist Token)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def logout(request):
+    """Handles logout by blacklisting refresh token."""
+    if "refresh" not in request.data:
+        return Response(
+            {"error": "Refresh token is required."}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        refresh_token = request.data["refresh"]
+        token = RefreshToken(refresh_token)
+        token.blacklist()  # ✅ Blacklist the token
+        return Response(
+            {"message": "Logout successful"}, status=status.HTTP_205_RESET_CONTENT
+        )
+    except Exception as e:
+        return Response({"error": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)

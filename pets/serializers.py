@@ -83,7 +83,6 @@ class PetSightingHistorySerializer(serializers.ModelSerializer):
 
 
 class PetSerializer(serializers.ModelSerializer):
-    print("i am in PetSerializer")
     size_display = serializers.CharField(source='get_size_display', read_only=True)
     contact_phone_display = serializers.CharField(source='get_contact_phone_display', read_only=True)
     gender_display = serializers.CharField(source='get_gender_display', read_only=True)
@@ -121,6 +120,7 @@ class PetSerializer(serializers.ModelSerializer):
     
     final_status = serializers.IntegerField(required=True)
     final_status_display = serializers.CharField(source='get_final_status_display', read_only=True)
+    is_closed = serializers.BooleanField(required=False)
     
     class Meta:
         model = Pet

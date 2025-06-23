@@ -425,6 +425,13 @@ class PetSightingView(APIView):
         # Create a new pet sighting entry
         pet = get_object_or_404(Pet, id=id)
 
+            # ✅ Block new sightings if the pet report is closed
+        if pet.is_closed:
+            return Response(
+                {"detail": "Ziņojums ir slēgts. Vairs nevar pievienot novērojumus."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         status_value = request.data.get('status')
         latitude = request.data.get('latitude')
         longitude = request.data.get('longitude')

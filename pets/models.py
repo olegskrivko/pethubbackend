@@ -67,13 +67,15 @@ class Pet(models.Model):
     ]
 
     FINAL_STATUS_CHOICES = [
-        (1, 'Nav atrisināts'),           # Open / No Update
+        (1, 'Nav atrisināts'),           # Unresolved / Open
         (2, 'Atgriezts saimniekam'),     # Reunited with Owner
-        (3, 'Nodots patversmei'),        # Taken to Shelter
-        (4, 'Joprojām tiek meklēts'),    # Still Missing / Owner Still Searching
-        (5, 'Nav aktuāli'),              # No Longer Relevant
-        (6, 'Atradies miris'),           # Deceased
-        (7, 'Saimnieks neatrasts'),      # Owner Not Found
+        (3, 'Nodots patversmei'),        # Given to Shelter
+        (4, 'Paturēts sev'),             # Kept by finder
+        (5, 'Klaiņojošs'),               # Stray / Wandering
+        (6, 'Brīvā pastaigā'),           # Free walk / known pet
+        (7, 'Miris'),                    # Found deceased
+        (8, 'Atradies'),                 # Pet was found by owner (from "lost")
+        (9, 'Cits'),                     # Other
     ]
 
     name = models.CharField(max_length=100, blank=True, null=True, verbose_name="Vārds")
@@ -104,15 +106,28 @@ class Pet(models.Model):
 
     is_public = models.BooleanField(default=True, verbose_name="Vai ir publisks?")
     is_verified = models.BooleanField(default=False, verbose_name="Vai ir pārbaudīts?")
+    is_closed = models.BooleanField(default=False, verbose_name="Ziņojums slēgts")
 
 
     final_status = models.IntegerField(choices=FINAL_STATUS_CHOICES, default=1, verbose_name="Galīgais statuss")
     # pet_image = models.URLField(max_length=255, blank=False, null=False, verbose_name="Mājdzīvnieka attēls")
 
 
+    # def save(self, *args, **kwargs):
+    #      # Auto-close only if the final_status is changed to something other than 1 ("Nav atrisināts")
+    #     if self.final_status != 1:
+    #         self.is_closed = True # Once closed, stays closed
+    #     super().save(*args, **kwargs)
+
+    def save(self, *args, **kwargs):
+        self.is_closed = self.final_status != 1  # Always syncs with status
+        super().save(*args, **kwargs)
+
     class Meta:
         verbose_name = "Mājdzīvnieks"
         verbose_name_plural = "Mājdzīvnieki"
+
+
 
     def __str__(self):
         return f"Pet {self.id}"
