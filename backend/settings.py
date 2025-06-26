@@ -254,10 +254,10 @@ REST_FRAMEWORK = {
     #     'rest_framework.throttling.UserRateThrottle',
     #     'rest_framework.throttling.AnonRateThrottle',
     # ],
-    'DEFAULT_THROTTLE_RATES': {
-        'user': '20/hour',   # 20 requests per hour per authenticated user
-        'anon': '10/hour',   # 10 requests per hour per anonymous user
-    },
+    # 'DEFAULT_THROTTLE_RATES': {
+    #     'user': '20/hour',   # 20 requests per hour per authenticated user
+    #     'anon': '10/hour',   # 10 requests per hour per anonymous user
+    # },
     # JWT Authentication only for protected endpoints
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
