@@ -245,11 +245,19 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 REST_FRAMEWORK = {
     
-    'DEFAULT_FILTER_BACKENDS': [
-        'django_filters.rest_framework.DjangoFilterBackend',  # Enables Django filters for your API
-        'rest_framework.filters.OrderingFilter',  # Allows ordering of results via query parameters
-        'rest_framework.filters.SearchFilter',  # Enables search functionality for your API
-    ],
+    # 'DEFAULT_FILTER_BACKENDS': [
+    #     'django_filters.rest_framework.DjangoFilterBackend',  # Enables Django filters for your API
+    #     'rest_framework.filters.OrderingFilter',  # Allows ordering of results via query parameters
+    #     'rest_framework.filters.SearchFilter',  # Enables search functionality for your API
+    # ],
+    #     'DEFAULT_THROTTLE_CLASSES': [
+    #     'rest_framework.throttling.UserRateThrottle',
+    #     'rest_framework.throttling.AnonRateThrottle',
+    # ],
+    'DEFAULT_THROTTLE_RATES': {
+        'user': '20/hour',   # 20 requests per hour per authenticated user
+        'anon': '10/hour',   # 10 requests per hour per anonymous user
+    },
     # JWT Authentication only for protected endpoints
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',

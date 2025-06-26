@@ -16,6 +16,8 @@ import json
 from authentication.ratelimit_utils import (
 hourly_20_rate_limit
 )
+#from rest_framework.throttling import UserRateThrottle, AnonRateThrottle
+
 # Load environment variables
 if os.path.exists("/etc/secrets/.env"):
     load_dotenv("/etc/secrets/.env")
@@ -27,7 +29,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 class ChatBotAPIView(APIView):
-    @hourly_20_rate_limit
+    #throttle_classes = [UserRateThrottle, AnonRateThrottle]
     def post(self, request):
         user_input = request.data.get("message", "")
         print("User input:", user_input)
@@ -127,7 +129,6 @@ If it's not a search, return:
             # Unknown intent fallback
             return Response({"type": "error", "reply": "Sorry, I didn't understand your request."}, status=400)
     
-    @hourly_20_rate_limit
     def search_pets(self, filters):
         print("Applying filters:", filters)
 
@@ -172,7 +173,7 @@ If it's not a search, return:
             except Exception as e:
                 print("Invalid recent_days value:", e)
 
-        final_qs = qs.order_by("-created_at")[:5]
+        final_qs = qs.order_by("-created_at")[:3]
         print("Final queryset count:", final_qs.count())
         return final_qs
 # class ChatBotAPIView(APIView):
@@ -370,7 +371,7 @@ QUESTIONS = [
 class PetRecommendationAPIView(APIView):
     permission_classes = [IsAuthenticated]
     
-    @hourly_20_rate_limit
+
     def post(self, request, *args, **kwargs):
         print("=== Debug Authentication ===")
         print("Auth header:", request.headers.get('Authorization'))
