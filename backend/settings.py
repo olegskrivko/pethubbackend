@@ -177,9 +177,9 @@ DATABASES = {
         'PASSWORD': os.getenv("DATABASES_PASSWORD"),
         'HOST': os.getenv("DATABASES_HOST"),
         'PORT': os.getenv("DATABASES_PORT"),
-        'OPTIONS': {
-            'sslmode': 'require',                       
-        },
+        # 'OPTIONS': {
+        #     'sslmode': 'require',                       
+        # },
     }
 }
 
