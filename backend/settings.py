@@ -42,11 +42,11 @@ CORS_ALLOW_ALL_ORIGINS = False  # Set to False for production
 
 # Or restrict to specific domains
 CORS_ALLOWED_ORIGINS = [
-    "https://pawclix.netlify.app",
+    "https://lunori.netlify.app",
     "http://localhost:3000",
     "http://localhost:5173",
-    "https://pawclix.com",
-    "https://www.pawclix.com",
+    "https://lunori.app",
+    "https://www.lunori.app",
 ]
 
 #CORS_ALLOW_ALL_ORIGINS = True  # ✅ For development only
