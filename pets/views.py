@@ -5,7 +5,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .models import Pet, PetSightingHistory
-from .serializers import PetSerializer, PetSightingHistorySerializer
+from .serializers import PetSerializer, PetSightingHistorySerializer, PosterSerializer
+
 from rest_framework import viewsets
 from rest_framework.filters import OrderingFilter, SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
@@ -41,6 +42,12 @@ from django.http import JsonResponse
 from django.conf import settings
 from notifications.models import PushSubscription
 from rest_framework.pagination import PageNumberPagination
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+from pets.models import Poster
+import json
+from rest_framework import generics
+
 from notifications.utils import send_push_notification  # Import the push notification function
 def calculate_distance(lat1, lon1, lat2, lon2):
     # Radius of the Earth in kilometers
@@ -64,6 +71,7 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     distance = R * c
     return distance
 User = get_user_model()
+
 
 class PetFilter(filters.FilterSet):
     status = filters.NumberFilter(field_name='status', lookup_expr='exact')
@@ -108,6 +116,54 @@ def get_user_pets(request):
     pets = Pet.objects.filter(author=user)
     serializer = PetSerializer(pets, many=True)
     return Response(serializer.data)
+
+class PosterCreateView(generics.CreateAPIView):
+    queryset = Poster.objects.all()
+    serializer_class = PosterSerializer
+
+
+
+class PosterBulkCreateView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    def post(self, request):
+        pet_id = request.data.get('pet')
+        name = request.data.get('name', '')
+        count = int(request.data.get('count', 1))
+
+        posters = []
+        for i in range(count):
+            poster_name = f"{name} #{i+1}" if count > 1 else name
+            poster = Poster.objects.create(
+                pet_id=pet_id,
+                name=poster_name
+            )
+            posters.append({
+                "id": str(poster.id),
+                "pet": pet_id,
+                "name": poster.name
+            })
+        
+        return Response(posters, status=status.HTTP_201_CREATED)
+    
+@csrf_exempt
+def set_poster_location(request, poster_id):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        poster = Poster.objects.get(id=poster_id)
+        if not poster.has_location:
+            poster.latitude = data['latitude']
+            poster.longitude = data['longitude']
+            poster.has_location = True
+            poster.save()
+        return JsonResponse({"status": "ok"})
+    
+@csrf_exempt
+def increment_poster_scan(request, poster_id):
+    if request.method == 'POST':
+        poster = Poster.objects.get(id=poster_id)
+        poster.scans += 1
+        poster.save()
+        return JsonResponse({"status": "ok", "scans": poster.scans})
 
 
 class PetStatusCountsView(APIView):
@@ -329,6 +385,12 @@ def pet_post_quota(request):
         'used': current_count,
         'remaining': remaining
     })
+
+
+class PosterDetailView(generics.RetrieveAPIView):
+    queryset = Poster.objects.all()
+    serializer_class = PosterSerializer
+    lookup_field = 'id'
 
 class PetSightingPagination(PageNumberPagination):
     page_size = 3

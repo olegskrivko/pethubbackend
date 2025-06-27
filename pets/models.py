@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+import uuid
 # from services.models import Service
 
 
@@ -168,6 +169,15 @@ class PetSightingHistory(models.Model):
     def __str__(self):
         return f"{self.pet.id} - {self.get_status_display()} at {self.created_at}"
 
+class Poster(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    pet = models.ForeignKey(Pet, on_delete=models.CASCADE, related_name='posters')
+    name = models.CharField(max_length=255, blank=True)  # e.g. "Park fence poster"
+    scans = models.PositiveIntegerField(default=0)
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    has_location = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
 
 class UserFavorites(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="favorites")

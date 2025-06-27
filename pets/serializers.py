@@ -4,6 +4,7 @@ from rest_framework import serializers
 from .models import Pet, PetSightingHistory
 from django.utils import timezone
 from django.contrib.auth import get_user_model
+from .models import Poster
 User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
@@ -136,3 +137,8 @@ class PetSerializer(serializers.ModelSerializer):
         print(f"✅ Pet {pet.id} saved successfully!")  # Debugging
         return pet
 
+
+class PosterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Poster
+        fields = '__all__'
