@@ -1,7 +1,7 @@
 # pets/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import PetViewSet, PetSightingView,  RecentPetsView,PosterBulkCreateView, PetStatusCountsView, PosterDetailView,  get_user_pets, pet_post_quota  # get_pet_status_counts   # Import get_user_pets, PetSightingCreate, PetSightingHistoryViewSet,
+from .views import PetViewSet, PetSightingView,  RecentPetsView,PosterBulkCreateView,UserPostersAPIView, PetStatusCountsView, PosterDetailView,  get_user_pets, pet_post_quota  # get_pet_status_counts   # Import get_user_pets, PetSightingCreate, PetSightingHistoryViewSet,
 from . import views
 
 router = DefaultRouter()
@@ -15,6 +15,9 @@ urlpatterns = [
     # path('status-counts/', get_pet_status_counts, name='pet-status-counts'),
     path('status-counts/', PetStatusCountsView.as_view(), name='pet-status-counts'),
     path('pet-quota/', pet_post_quota, name='pet-post-quota'),
+    # Add this BEFORE including the router
+    path('my-posters/', UserPostersAPIView.as_view(), name='my-posters'),
+
     path('', include(router.urls)),  # Register PetViewSet in the API
     
     #path('<int:id>/pet-sightings/', PetSightingCreate.as_view(), name='create_pet_sighting'),  # New route for pet sightings
@@ -32,7 +35,8 @@ urlpatterns = [
     # This is your scan endpoint used when people scan the QR code.
     path('posters/<uuid:poster_id>/scan/', views.increment_poster_scan, name='poster-scan'),
     #path('posters/<uuid:poster_id>/update-location/', views.update_poster_location, name='update-poster-location'),
-
+    # path('my-posters/', views.get_user_posters, name='get-user-posters'),
+ 
 
 ] 
 

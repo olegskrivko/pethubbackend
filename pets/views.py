@@ -121,7 +121,31 @@ def get_user_pets(request):
 #     queryset = Poster.objects.all()
 #     serializer_class = PosterSerializer
 
+class UserPostersAPIView(APIView):
+    permission_classes = [IsAuthenticated]
 
+    def get(self, request, format=None):
+        user = request.user
+        posters = Poster.objects.filter(pet__author=user)
+        serializer = PosterSerializer(posters, many=True)
+        return Response(serializer.data)
+# class UserPostersListView(generics.ListAPIView):
+#     serializer_class = PosterSerializer
+#     permission_classes = [IsAuthenticatedOrReadOnly]
+
+#     def get_queryset(self):
+#         user = self.request.user
+#         return Poster.objects.filter(pet__author=user)
+# @api_view(['GET'])
+# @permission_classes([IsAuthenticated])
+# def get_user_posters(request):
+#     """
+#     Return all posters created for pets owned by the current user.
+#     """
+#     user = request.user
+#     posters = Poster.objects.filter(pet__author=user)
+#     serializer = PosterSerializer(posters, many=True)
+#     return Response(serializer.data)
 
 class PosterBulkCreateView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
@@ -170,53 +194,7 @@ def increment_poster_scan(request, poster_id):
         })
 
 
-# @csrf_exempt
-# def increment_poster_scan(request, poster_id):
-#     if request.method == 'POST':
-#         data = json.loads(request.body)
 
-#         try:
-#             poster = Poster.objects.get(id=poster_id)
-#         except Poster.DoesNotExist:
-#             return JsonResponse({"error": "Poster not found."}, status=404)
-
-#         # If the poster has no location, store it from the scan
-#         if not poster.has_location:
-#             lat = data.get('latitude')
-#             lon = data.get('longitude')
-#             if lat is not None and lon is not None:
-#                 poster.latitude = lat
-#                 poster.longitude = lon
-#                 poster.has_location = True
-
-#         poster.scans += 1
-#         poster.save()
-
-#         return JsonResponse({
-#             "status": "ok",
-#             "scans": poster.scans,
-#             "latitude": poster.latitude,
-#             "longitude": poster.longitude
-#         })    
-# @csrf_exempt
-# def set_poster_location(request, poster_id):
-#     if request.method == 'POST':
-#         data = json.loads(request.body)
-#         poster = Poster.objects.get(id=poster_id)
-#         if not poster.has_location:
-#             poster.latitude = data['latitude']
-#             poster.longitude = data['longitude']
-#             poster.has_location = True
-#             poster.save()
-#         return JsonResponse({"status": "ok"})
-    
-# @csrf_exempt
-# def increment_poster_scan(request, poster_id):
-#     if request.method == 'POST':
-#         poster = Poster.objects.get(id=poster_id)
-#         poster.scans += 1
-#         poster.save()
-#         return JsonResponse({"status": "ok", "scans": poster.scans})
 
 
 class PetStatusCountsView(APIView):
@@ -281,6 +259,7 @@ class PetViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         # The pagination logic is handled automatically by the pagination class
         return super().list(request, *args, **kwargs)
+    
     
     def perform_create(self, serializer):
         user = self.request.user
@@ -449,83 +428,7 @@ class PetSightingPagination(PageNumberPagination):
     page_size = 3
     page_size_query_param = 'page_size'
 
-# class PetSightingView(APIView):
-#     """
-#     Handles creating pet sighting entry (POST), listing pet sightings (GET), and deleting a sighting (DELETE)
-#     """
-#     permission_classes = [IsAuthenticatedOrReadOnly]
 
-#     def get(self, request, id):
-#         # List paginated pet sightings for a specific pet
-#         pet = get_object_or_404(Pet, id=id)
-#         sightings = PetSightingHistory.objects.filter(pet=pet).order_by('-created_at')
-
-#         paginator = PetSightingPagination()
-#         page = paginator.paginate_queryset(sightings, request)
-#         serializer = PetSightingHistorySerializer(page, many=True)
-
-#         return paginator.get_paginated_response(serializer.data)
-
-#     def post(self, request, id):
-#         # Create a new pet sighting entry
-#         pet = get_object_or_404(Pet, id=id)
-
-#         status_value = request.data.get('status')
-#         latitude = request.data.get('latitude')
-#         longitude = request.data.get('longitude')
-#         notes = request.data.get('notes', '')
-#         reporter = request.user
-
-#         # Validate `status`
-#         try:
-#             status_value = int(status_value)
-#             if status_value not in dict(PetSightingHistory.STATUS_CHOICES):
-#                 return Response({"error": "Invalid status value"}, status=status.HTTP_400_BAD_REQUEST)
-#         except (ValueError, TypeError):
-#             return Response({"error": "Invalid status format"}, status=status.HTTP_400_BAD_REQUEST)
-
-#         # Handle image upload (if provided)
-#         image_url = None
-#         image = request.FILES.get('image')
-#         if image:
-#             uploaded_image = cloudinary.uploader.upload(image)
-#             image_url = uploaded_image.get("secure_url")
-
-#         # Validate latitude/longitude only if provided
-#         if latitude is not None and longitude is not None:
-#             try:
-#                 latitude = Decimal(latitude)
-#                 longitude = Decimal(longitude)
-#                 if not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
-#                     return Response({"error": "Latitude must be between -90 and 90 and longitude between -180 and 180."}, status=status.HTTP_400_BAD_REQUEST)
-#             except (InvalidOperation, ValueError):
-#                 return Response({"error": "Invalid latitude or longitude format"}, status=status.HTTP_400_BAD_REQUEST)
-#         else:
-#             # Require at least image or notes if no coordinates
-#             if not image_url and not notes:
-#                 return Response({"error": "Either coordinates, an image, or notes must be provided."}, status=status.HTTP_400_BAD_REQUEST)
-
-#         # Save the pet sighting in the database
-#         sighting = PetSightingHistory.objects.create(
-#             pet=pet,
-#             status=status_value,
-#             latitude=latitude if latitude is not None else None,
-#             longitude=longitude if longitude is not None else None,
-#             notes=notes,
-#             reporter=reporter,
-#             pet_image=image_url
-#         )
-
-#         return Response({
-#             "id": sighting.id,
-#             "pet": sighting.pet.id,
-#             "status": sighting.get_status_display(),
-#             "latitude": sighting.latitude,
-#             "longitude": sighting.longitude,
-#             "notes": sighting.notes,
-#             "image": sighting.pet_image,
-#             "reporter": sighting.reporter.id,
-#         }, status=status.HTTP_201_CREATED)
 class PetSightingView(APIView):
     """Handles creating pet sighting entry (POST), listing pet sightings (GET), and deleting a sighting (DELETE)"""
     permission_classes = [IsAuthenticatedOrReadOnly]
@@ -648,3 +551,129 @@ class RecentPetsView(APIView):
             return Response(serializer.data)
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+# class PetSightingView(APIView):
+#     """
+#     Handles creating pet sighting entry (POST), listing pet sightings (GET), and deleting a sighting (DELETE)
+#     """
+#     permission_classes = [IsAuthenticatedOrReadOnly]
+
+#     def get(self, request, id):
+#         # List paginated pet sightings for a specific pet
+#         pet = get_object_or_404(Pet, id=id)
+#         sightings = PetSightingHistory.objects.filter(pet=pet).order_by('-created_at')
+
+#         paginator = PetSightingPagination()
+#         page = paginator.paginate_queryset(sightings, request)
+#         serializer = PetSightingHistorySerializer(page, many=True)
+
+#         return paginator.get_paginated_response(serializer.data)
+
+#     def post(self, request, id):
+#         # Create a new pet sighting entry
+#         pet = get_object_or_404(Pet, id=id)
+
+#         status_value = request.data.get('status')
+#         latitude = request.data.get('latitude')
+#         longitude = request.data.get('longitude')
+#         notes = request.data.get('notes', '')
+#         reporter = request.user
+
+#         # Validate `status`
+#         try:
+#             status_value = int(status_value)
+#             if status_value not in dict(PetSightingHistory.STATUS_CHOICES):
+#                 return Response({"error": "Invalid status value"}, status=status.HTTP_400_BAD_REQUEST)
+#         except (ValueError, TypeError):
+#             return Response({"error": "Invalid status format"}, status=status.HTTP_400_BAD_REQUEST)
+
+#         # Handle image upload (if provided)
+#         image_url = None
+#         image = request.FILES.get('image')
+#         if image:
+#             uploaded_image = cloudinary.uploader.upload(image)
+#             image_url = uploaded_image.get("secure_url")
+
+#         # Validate latitude/longitude only if provided
+#         if latitude is not None and longitude is not None:
+#             try:
+#                 latitude = Decimal(latitude)
+#                 longitude = Decimal(longitude)
+#                 if not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
+#                     return Response({"error": "Latitude must be between -90 and 90 and longitude between -180 and 180."}, status=status.HTTP_400_BAD_REQUEST)
+#             except (InvalidOperation, ValueError):
+#                 return Response({"error": "Invalid latitude or longitude format"}, status=status.HTTP_400_BAD_REQUEST)
+#         else:
+#             # Require at least image or notes if no coordinates
+#             if not image_url and not notes:
+#                 return Response({"error": "Either coordinates, an image, or notes must be provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+#         # Save the pet sighting in the database
+#         sighting = PetSightingHistory.objects.create(
+#             pet=pet,
+#             status=status_value,
+#             latitude=latitude if latitude is not None else None,
+#             longitude=longitude if longitude is not None else None,
+#             notes=notes,
+#             reporter=reporter,
+#             pet_image=image_url
+#         )
+
+#         return Response({
+#             "id": sighting.id,
+#             "pet": sighting.pet.id,
+#             "status": sighting.get_status_display(),
+#             "latitude": sighting.latitude,
+#             "longitude": sighting.longitude,
+#             "notes": sighting.notes,
+#             "image": sighting.pet_image,
+#             "reporter": sighting.reporter.id,
+#         }, status=status.HTTP_201_CREATED)
+
+
+# @csrf_exempt
+# def increment_poster_scan(request, poster_id):
+#     if request.method == 'POST':
+#         data = json.loads(request.body)
+
+#         try:
+#             poster = Poster.objects.get(id=poster_id)
+#         except Poster.DoesNotExist:
+#             return JsonResponse({"error": "Poster not found."}, status=404)
+
+#         # If the poster has no location, store it from the scan
+#         if not poster.has_location:
+#             lat = data.get('latitude')
+#             lon = data.get('longitude')
+#             if lat is not None and lon is not None:
+#                 poster.latitude = lat
+#                 poster.longitude = lon
+#                 poster.has_location = True
+
+#         poster.scans += 1
+#         poster.save()
+
+#         return JsonResponse({
+#             "status": "ok",
+#             "scans": poster.scans,
+#             "latitude": poster.latitude,
+#             "longitude": poster.longitude
+#         })    
+# @csrf_exempt
+# def set_poster_location(request, poster_id):
+#     if request.method == 'POST':
+#         data = json.loads(request.body)
+#         poster = Poster.objects.get(id=poster_id)
+#         if not poster.has_location:
+#             poster.latitude = data['latitude']
+#             poster.longitude = data['longitude']
+#             poster.has_location = True
+#             poster.save()
+#         return JsonResponse({"status": "ok"})
+    
+# @csrf_exempt
+# def increment_poster_scan(request, poster_id):
+#     if request.method == 'POST':
+#         poster = Poster.objects.get(id=poster_id)
+#         poster.scans += 1
+#         poster.save()
+#         return JsonResponse({"status": "ok", "scans": poster.scans})
