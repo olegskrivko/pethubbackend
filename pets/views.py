@@ -117,9 +117,9 @@ def get_user_pets(request):
     serializer = PetSerializer(pets, many=True)
     return Response(serializer.data)
 
-class PosterCreateView(generics.CreateAPIView):
-    queryset = Poster.objects.all()
-    serializer_class = PosterSerializer
+# class PosterCreateView(generics.CreateAPIView):
+#     queryset = Poster.objects.all()
+#     serializer_class = PosterSerializer
 
 
 
@@ -144,26 +144,79 @@ class PosterBulkCreateView(APIView):
             })
         
         return Response(posters, status=status.HTTP_201_CREATED)
-    
-@csrf_exempt
-def set_poster_location(request, poster_id):
-    if request.method == 'POST':
-        data = json.loads(request.body)
-        poster = Poster.objects.get(id=poster_id)
-        if not poster.has_location:
-            poster.latitude = data['latitude']
-            poster.longitude = data['longitude']
-            poster.has_location = True
-            poster.save()
-        return JsonResponse({"status": "ok"})
-    
+
 @csrf_exempt
 def increment_poster_scan(request, poster_id):
     if request.method == 'POST':
-        poster = Poster.objects.get(id=poster_id)
+        data = json.loads(request.body or "{}")
+
+        try:
+            poster = Poster.objects.get(id=poster_id)
+        except Poster.DoesNotExist:
+            return JsonResponse({"error": "Poster not found."}, status=404)
+
+        if not poster.has_location and data.get("latitude") and data.get("longitude"):
+            poster.latitude = data["latitude"]
+            poster.longitude = data["longitude"]
+            poster.has_location = True
+
         poster.scans += 1
         poster.save()
-        return JsonResponse({"status": "ok", "scans": poster.scans})
+
+        return JsonResponse({
+            "status": "ok",
+            "scans": poster.scans,
+            "pet_id": poster.pet_id
+        })
+
+
+# @csrf_exempt
+# def increment_poster_scan(request, poster_id):
+#     if request.method == 'POST':
+#         data = json.loads(request.body)
+
+#         try:
+#             poster = Poster.objects.get(id=poster_id)
+#         except Poster.DoesNotExist:
+#             return JsonResponse({"error": "Poster not found."}, status=404)
+
+#         # If the poster has no location, store it from the scan
+#         if not poster.has_location:
+#             lat = data.get('latitude')
+#             lon = data.get('longitude')
+#             if lat is not None and lon is not None:
+#                 poster.latitude = lat
+#                 poster.longitude = lon
+#                 poster.has_location = True
+
+#         poster.scans += 1
+#         poster.save()
+
+#         return JsonResponse({
+#             "status": "ok",
+#             "scans": poster.scans,
+#             "latitude": poster.latitude,
+#             "longitude": poster.longitude
+#         })    
+# @csrf_exempt
+# def set_poster_location(request, poster_id):
+#     if request.method == 'POST':
+#         data = json.loads(request.body)
+#         poster = Poster.objects.get(id=poster_id)
+#         if not poster.has_location:
+#             poster.latitude = data['latitude']
+#             poster.longitude = data['longitude']
+#             poster.has_location = True
+#             poster.save()
+#         return JsonResponse({"status": "ok"})
+    
+# @csrf_exempt
+# def increment_poster_scan(request, poster_id):
+#     if request.method == 'POST':
+#         poster = Poster.objects.get(id=poster_id)
+#         poster.scans += 1
+#         poster.save()
+#         return JsonResponse({"status": "ok", "scans": poster.scans})
 
 
 class PetStatusCountsView(APIView):

@@ -1,7 +1,7 @@
 # pets/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import PetViewSet, PetSightingView,  RecentPetsView,PosterBulkCreateView, PetStatusCountsView, PosterDetailView, PosterCreateView, get_user_pets, pet_post_quota  # get_pet_status_counts   # Import get_user_pets, PetSightingCreate, PetSightingHistoryViewSet,
+from .views import PetViewSet, PetSightingView,  RecentPetsView,PosterBulkCreateView, PetStatusCountsView, PosterDetailView,  get_user_pets, pet_post_quota  # get_pet_status_counts   # Import get_user_pets, PetSightingCreate, PetSightingHistoryViewSet,
 from . import views
 
 router = DefaultRouter()
@@ -24,11 +24,15 @@ urlpatterns = [
     #path('pet-sightings/<int:pk>/', PetSightingHistoryViewSet.as_view({'delete': 'destroy'}), name='delete_pet_sighting'),  # DELETE pet sighting
     # path('<int:pk>/', PetViewSet.as_view({'put': 'update', 'patch': 'update'}), name='pet-update'),
     path('recent-pets/', RecentPetsView.as_view(), name='recent-pets'),
-    path('posters/', PosterCreateView.as_view(), name='poster-create'),
+    #path('posters/', PosterCreateView.as_view(), name='poster-create'),
     path('posters/<uuid:id>/', PosterDetailView.as_view(), name='poster-detail'),
+    # Your frontend generates several QR codes at once
     path('posters/bulk-create/', PosterBulkCreateView.as_view(), name='poster-bulk-create'),
-    path('posters/<uuid:poster_id>/set-location/', views.set_poster_location, name='set-poster-location'),
+    # path('posters/<uuid:poster_id>/set-location/', views.set_poster_location, name='set-poster-location'),
+    # This is your scan endpoint used when people scan the QR code.
     path('posters/<uuid:poster_id>/scan/', views.increment_poster_scan, name='poster-scan'),
+    #path('posters/<uuid:poster_id>/update-location/', views.update_poster_location, name='update-poster-location'),
+
 
 ] 
 
