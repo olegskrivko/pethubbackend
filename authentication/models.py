@@ -76,7 +76,7 @@ class CustomUser(AbstractUser):
     """
     Custom User model extending AbstractUser.
     Uses email as the USERNAME_FIELD and auto-generates username and avatar.
-    Supports email verification, password reset tokens, and subscription fields.
+    Supports email verification and password reset tokens.
     """
     username = models.CharField(max_length=255, unique=True, blank=True)
     email = models.EmailField(unique=True)
@@ -91,13 +91,6 @@ class CustomUser(AbstractUser):
     password_reset_token = models.CharField(max_length=100, blank=True, null=True)
     password_reset_expires = models.DateTimeField(blank=True, null=True)
 
-    # Subscription
-    is_subscribed = models.BooleanField(default=False)
-    subscription_start = models.DateTimeField(null=True, blank=True)
-    subscription_end = models.DateTimeField(null=True, blank=True)
-    stripe_customer_id = models.CharField(max_length=255, null=True, blank=True)
-    subscription_type = models.CharField(max_length=50, null=True, blank=True)
-
     # Avatar animal
     avatar = models.CharField(max_length=100, blank=True, null=True)
 
@@ -109,42 +102,6 @@ class CustomUser(AbstractUser):
     REQUIRED_FIELDS = []  # username is auto-generated, so we don't require it
 
     objects = CustomUserManager()
-
-    def update_subscription(self, subscription_data):
-        """
-        Update user's subscription information.
-        
-        Args:
-            subscription_data (dict): Dictionary containing subscription information
-                - customer_id: Stripe customer ID
-                - subscription_type: Type of subscription
-                - start_date: Subscription start date
-                - end_date: Subscription end date
-                - is_active: Whether subscription is active
-        """
-        self.stripe_customer_id = subscription_data.get('customer_id')
-        self.subscription_type = subscription_data.get('subscription_type')
-        self.subscription_start = subscription_data.get('start_date')
-        self.subscription_end = subscription_data.get('end_date')
-        self.is_subscribed = subscription_data.get('is_active', False)
-        self.save()
-
-    def cancel_subscription(self):
-        """Cancel the user's subscription."""
-        self.is_subscribed = False
-        self.subscription_type = None
-        self.subscription_end = None
-        self.save()
-
-    def get_subscription_status(self):
-        """Get the current subscription status."""
-        return {
-            'is_subscribed': self.is_subscribed,
-            'subscription_type': self.subscription_type,
-            'subscription_start': self.subscription_start,
-            'subscription_end': self.subscription_end,
-            'stripe_customer_id': self.stripe_customer_id
-        }
 
     def save(self, *args, **kwargs):
         """Generate activation token and expiry date only on user creation."""

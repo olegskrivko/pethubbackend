@@ -8,22 +8,15 @@ class CustomUserAdmin(UserAdmin):
     #add_form = CustomUserCreationForm
 
     list_display = [
-        'email', 'username', 'is_active', 'is_staff', 'is_superuser',
-        'is_subscribed', 'subscription_start', 'subscription_type'
+        'email', 'username', 'is_active', 'is_staff', 'is_superuser'
     ]
-    list_filter = ['is_active', 'is_staff', 'is_superuser', 'is_subscribed']
+    list_filter = ['is_active', 'is_staff', 'is_superuser']
     search_fields = ['email', 'username']
     ordering = ['email']
 
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         ('Personal info', {'fields': ('username', 'avatar')}),
-        ('Subscription', {
-            'fields': (
-                'is_subscribed', 'subscription_start', 'subscription_end',
-                'subscription_type', 'stripe_customer_id'
-            )
-        }),
         ('Permissions', {
             'fields': (
                 'is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions'
@@ -37,7 +30,7 @@ class CustomUserAdmin(UserAdmin):
             'classes': ('wide',),
             'fields': (
                 'email', 'password1', 'password2', 'username', 'avatar',
-                'is_staff', 'is_superuser', 'is_subscribed'
+                'is_staff', 'is_superuser'
             )
         }),
     )

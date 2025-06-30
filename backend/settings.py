@@ -115,7 +115,6 @@ INSTALLED_APPS = [
     'chatbot',
     'feedback',
     'notifications',
-    'payment',
     'pets',
     'services',
     'shelters',
@@ -324,17 +323,6 @@ CLOUDINARY_STORAGE = {
     'CLOUD_NAME': os.getenv("CLOUDINARY_CLOUD_NAME"),
     'API_KEY': os.getenv("CLOUDINARY_API_KEY"),
     'API_SECRET': os.getenv("CLOUDINARY_API_SECRET"),
-}
-
-# Retrieve Stripe keys and webhook secret from environment variables
-STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
-STRIPE_PUBLIC_KEY = os.getenv("STRIPE_PUBLIC_KEY")
-STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
-#STRIPE_SUBSCRIPTION_PRICE_ID = os.getenv("STRIPE_SUBSCRIPTION_PRICE_ID")
-
-STRIPE_SUBSCRIPTION_PRICE_IDS = {
-    'plus': os.getenv('STRIPE_PLUS_PRICE_ID'), # Your Plus tier price ID
-    'premium': os.getenv('STRIPE_PREMIUM_PRICE_ID') # Your Premium tier price ID
 }
 
 # Base URL of this backend API (e.g., used in serializers or templates)

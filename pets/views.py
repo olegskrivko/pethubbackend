@@ -49,6 +49,10 @@ import json
 from rest_framework import generics
 
 from notifications.utils import send_push_notification  # Import the push notification function
+
+# Maximum number of pets allowed per user
+MAX_PETS_PER_USER = 5
+
 def calculate_distance(lat1, lon1, lat2, lon2):
     # Radius of the Earth in kilometers
     R = 6371.0
@@ -240,21 +244,10 @@ class PetViewSet(viewsets.ModelViewSet):
     #     'age': ['exact', 'gte', 'lte'],  # Filter by age (exact, greater than, or less than)
     # }
     parser_classes = (MultiPartParser, FormParser)
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        
-        # Optional: you can still customize filtering behavior if needed here, but filterset_class should handle most cases
-        return queryset
     
-    def get_pet_limit(self, user):
-        if getattr(user, "is_subscribed", False):
-            if getattr(user, "subscription_type", "") == 'plus':
-                return 3
-            elif getattr(user, "subscription_type", "") == 'premium':
-                return 5
-        return 1
-
-
+    def get_queryset(self):
+        # Filter out closed pets for public view
+        return Pet.objects.filter(is_closed=False).order_by('-created_at')
     
     def list(self, request, *args, **kwargs):
         # The pagination logic is handled automatically by the pagination class
@@ -264,13 +257,10 @@ class PetViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         user = self.request.user
         current_count = Pet.objects.filter(author=user).count()
-        pet_limit = self.get_pet_limit(user)
         
-
-        if current_count >= pet_limit:
+        if current_count >= MAX_PETS_PER_USER:
             raise ValidationError(
-                f"Jūs esat sasniedzis mājdzīvnieku pievienošanas limitu ({pet_limit}). "
-                "Lūdzu, dzēsiet esošu ierakstu vai atjauniniet abonementu."
+                f"You have reached the limit of {MAX_PETS_PER_USER} pets per user. Contact us if you need more."
             )
 
         uploaded_images = {}
@@ -296,26 +286,6 @@ class PetViewSet(viewsets.ModelViewSet):
         # Fill remaining image fields with None
         for i in range(len(uploaded_images_list) + 1, 5):  # Ensure all 4 fields exist
             uploaded_images[f"pet_image_{i}"] = None
-        # image_1 = self.request.FILES.get('pet_image_1_media')
-        # image_2 = self.request.FILES.get('pet_image_2_media')
-        # image_3 = self.request.FILES.get('pet_image_3_media')
-        # image_4 = self.request.FILES.get('pet_image_4_media')
-        # uploaded_image_1_url = None
-        # uploaded_image_2_url = None
-        # uploaded_image_3_url = None
-        # uploaded_image_4_url = None
-        # if image_1:
-        #     uploaded_image_1 = cloudinary.uploader.upload(image_1)
-        #     uploaded_image_1_url = uploaded_image_1.get("secure_url")
-        # if image_2:
-        #     uploaded_image_2 = cloudinary.uploader.upload(image_2)
-        #     uploaded_image_2_url = uploaded_image_2.get("secure_url")
-        # if image_3:
-        #     uploaded_image_3 = cloudinary.uploader.upload(image_3)
-        #     uploaded_image_3_url = uploaded_image_3.get("secure_url")
-        # if image_4:
-        #     uploaded_image_4 = cloudinary.uploader.upload(image_4)
-        #     uploaded_image_4_url = uploaded_image_4.get("secure_url")
 
             # Get date and time from request
         date = self.request.data.get("date")  # e.g., "2025-04-01"
@@ -337,10 +307,6 @@ class PetViewSet(viewsets.ModelViewSet):
 
         pet = serializer.save(
             author=self.request.user,
-            # pet_image_1=uploaded_image_1_url,
-            # pet_image_2=uploaded_image_2_url,
-            # pet_image_3=uploaded_image_3_url,
-            # pet_image_4=uploaded_image_4_url,
             event_occurred_at=event_occurred_at,
              **uploaded_images  # Dynamically assign images
         )
@@ -397,23 +363,13 @@ class PetViewSet(viewsets.ModelViewSet):
 def pet_post_quota(request):
     user = request.user
 
-    # Default limit for free users
-    pet_limit = 1
-
-    # Adjust based on subscription
-    if getattr(user, "is_subscribed", False):
-        if user.subscription_type == 'plus':
-            pet_limit = 3
-        elif user.subscription_type == 'premium':
-            pet_limit = 5
-
     # Count how many pets the user has already posted
     current_count = Pet.objects.filter(author=user).count()
 
-    remaining = max(pet_limit - current_count, 0)
+    remaining = max(MAX_PETS_PER_USER - current_count, 0)
 
     return Response({
-        'limit': pet_limit,
+        'limit': MAX_PETS_PER_USER,
         'used': current_count,
         'remaining': remaining
     })

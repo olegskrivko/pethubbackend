@@ -27,7 +27,6 @@ urlpatterns = [
     path('api/chatbot/', include('chatbot.urls')),
     path('api/feedbacks/', include('feedback.urls')),
     path('api/notifications/', include('notifications.urls')),
-    path('api/payment/', include('payment.urls')),
     path('api/pets/', include('pets.urls')),
     path('api/services/', include('services.urls')),
     path('api/shelters/', include('shelters.urls')),
