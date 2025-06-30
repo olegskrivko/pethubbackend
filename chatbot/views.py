@@ -277,7 +277,7 @@ class PetRecommendationAPIView(APIView):
 
             # Extract and parse AI response
             ai_response = response.choices[0].message.content.strip()
-            
+
             try:
                 parsed_response = json.loads(ai_response)
                 response_data = {"pet": parsed_response["pet"]}
