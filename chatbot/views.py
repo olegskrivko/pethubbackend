@@ -28,13 +28,24 @@ else:
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
-class ChatBotAPIView(APIView):
-    #throttle_classes = [UserRateThrottle, AnonRateThrottle]
-    def post(self, request):
-        user_input = request.data.get("message", "")
-        print("User input:", user_input)
+# ============================================================================
+# CHATBOT API VIEW
+# ============================================================================
 
-        # Step 1: Classification system prompt to extract intent and filters as JSON
+class ChatBotAPIView(APIView):
+    """
+    AI-powered chatbot for pet search and informational queries.
+    Handles both search requests and general pet-related questions.
+    """
+    
+    def post(self, request):
+        """
+        Process user input and return appropriate response.
+        Supports both pet search and informational queries.
+        """
+        user_input = request.data.get("message", "")
+
+        # Step 1: Classify user intent using AI
         system_prompt = """
 You are an assistant for a lost pet search website. Classify the message as either:
 - "informational": user is asking general questions about pets or lost/found process.
@@ -68,24 +79,24 @@ If it's not a search, return:
                     {"role": "user", "content": user_input}
                 ]
             )
-            print("GPT classification response:", classification_response)
 
             gpt_content = classification_response.choices[0].message.content
             gpt_result = json.loads(gpt_content)
-            print("Parsed GPT result:", gpt_result)
         except Exception as e:
-            print("Error during GPT classification or JSON parsing:", e)
-            return Response({"type": "error", "reply": "GPT classification error."}, status=500)
+            return Response(
+                {"type": "error", "reply": "GPT classification error."}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-        # Step 2: Handle 'search' intent - filter pets from DB
+        # Step 2: Handle search intent
         if gpt_result.get("intent") == "search":
             pets = self.search_pets(gpt_result)
-            print("Pets found (queryset):", pets)
 
             if pets.exists():
                 results = [
-                    {   "status": pet.status,  # integer
-                        "status_display": pet.get_status_display(),  # string, Django model method
+                    {
+                        "status": pet.status,
+                        "status_display": pet.get_status_display(),
                         "species": pet.species,
                         "species_display": pet.get_species_display(),
                         "name": pet.name or "Bezvārda dzīvnieks",
@@ -94,14 +105,15 @@ If it's not a search, return:
                     }
                     for pet in pets
                 ]
-                print("Formatted pet results:", results)
                 return Response({"type": "pet_results", "pets": results})
-
             else:
-                print("No pets matched the filters.")
-                return Response({"type": "pet_results", "pets": [], "message": "Nekas netika atrasts."})
+                return Response({
+                    "type": "pet_results", 
+                    "pets": [], 
+                    "message": "Nekas netika atrasts."
+                })
 
-        # Step 3: For informational questions, generate an answer with context prompt
+        # Step 3: Handle informational questions
         elif gpt_result.get("intent") == "informational":
             try:
                 detailed_system_prompt = (
@@ -117,245 +129,77 @@ If it's not a search, return:
                         {"role": "user", "content": user_input}
                     ]
                 )
-                print("Informational GPT response:", info_response)
+                
                 reply = info_response.choices[0].message.content.strip()
                 return Response({"type": "info", "reply": reply})
 
             except Exception as e:
-                print("Error during GPT informational response:", e)
-                return Response({"type": "error", "reply": "Error communicating with GPT."}, status=500)
+                return Response(
+                    {"type": "error", "reply": "Error communicating with GPT."}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
 
         else:
-            # Unknown intent fallback
-            return Response({"type": "error", "reply": "Sorry, I didn't understand your request."}, status=400)
+            return Response(
+                {"type": "error", "reply": "Sorry, I didn't understand your request."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
     
     def search_pets(self, filters):
-        print("Applying filters:", filters)
-
-        # qs = Pet.objects.filter(is_public=True, is_verified=True)
+        """
+        Search pets based on provided filters.
+        
+        Args:
+            filters (dict): Dictionary containing search criteria
+            
+        Returns:
+            QuerySet: Filtered pet queryset
+        """
         qs = Pet.objects.filter()
-        print("Initial queryset count:", qs.count())
 
-        # Map textual filters to DB values
+        # Map textual filters to database values
         status_map = {"lost": 1, "found": 2, "seen": 3}
         species_map = {"dog": 1, "cat": 2, "other": 3}
         size_map = {"small": 1, "medium": 2, "large": 3}
-        
         color_map = {name.lower(): id for id, name in Pet.COLOR_CHOICES}
-        #color_map = {"brown": 7, "black": 1, "white": 3}  # Extend as needed
 
+        # Apply filters
         if "status" in filters:
             status_val = status_map.get(filters["status"].lower())
             if status_val:
                 qs = qs.filter(status=status_val)
-                print("Filtered by status:", filters["status"])
+                
         if "species" in filters:
             species_val = species_map.get(filters["species"].lower())
             if species_val:
                 qs = qs.filter(species=species_val)
-                print("Filtered by species:", filters["species"])
+                
         if "size" in filters:
             size_val = size_map.get(filters["size"].lower())
             if size_val:
                 qs = qs.filter(size=size_val)
-                print("Filtered by size:", filters["size"])
+                
         if "color" in filters:
             color_val = color_map.get(filters["color"].lower())
             if color_val:
                 qs = qs.filter(primary_color=color_val)
-                print("Filtered by color:", filters["color"])
+                
         if "recent_days" in filters:
             try:
                 days = int(filters["recent_days"])
                 since = now() - timedelta(days=days)
                 qs = qs.filter(created_at__gte=since)
-                print("Filtered by recent_days:", days)
-            except Exception as e:
-                print("Invalid recent_days value:", e)
+            except (ValueError, TypeError):
+                pass
 
-        final_qs = qs.order_by("-created_at")[:3]
-        print("Final queryset count:", final_qs.count())
-        return final_qs
-# class ChatBotAPIView(APIView):
-#     def post(self, request):
-#         user_input = request.data.get("message", "")
-#         print("User input:", user_input)
-
-#         system_prompt = """
-# You are an assistant for a lost pet search website. Classify the message as either:
-# - "informational": user is asking general questions about pets or lost/found process.
-# - "search": user wants to search for pets using filters.
-
-# If it's a search, extract a JSON like:
-# {
-#   "intent": "search",
-#   "status": "lost",
-#   "species": "dog",
-#   "size": "small",
-#   "color": "brown",
-#   "recent_days": 7
-# }
-
-# Supported filters: status, species, size, color, recent_days
-# Status: lost, found, seen
-# Species: dog, cat, other
-# Size: small, medium, large
-# Color: black, white, brown, etc.
-
-# If it's not a search, return:
-# { "intent": "informational" }
-# """
-
-#         # Step 1: Ask GPT to classify and extract filters using new client method
-#         try:
-#             response = client.chat.completions.create(
-#                 model="gpt-4",
-#                 messages=[
-#                     {"role": "system", "content": system_prompt},
-#                     {"role": "user", "content": user_input}
-#                 ]
-#             )
-#             print("GPT filter classification response:", response)
-#             gpt_content = response.choices[0].message.content
-#             gpt_result = json.loads(gpt_content)
-#             print("Parsed GPT result:", gpt_result)
-#         except Exception as e:
-#             print("Error during GPT classification or parsing:", e)
-#             return Response({"type": "error", "reply": "GPT klasifikācijas kļūda."}, status=500)
-
-#         # Step 2: Handle intent
-#         if gpt_result.get("intent") == "search":
-#             pets = self.search_pets(gpt_result)
-#             print("Pets found (queryset):", pets)
-
-#             if pets:
-#                 results = [
-#                     {
-#                         "name": pet.name or "Bezvārda dzīvnieks",
-#                         "image": pet.pet_image_1,
-#                         "url": f"/pets/{pet.id}"
-#                     }
-#                     for pet in pets
-#                 ]
-#                 print("Formatted pet results:", results)
-#                 return Response({"type": "pet_results", "pets": results})
-#             else:
-#                 print("No pets matched the filters.")
-#                 return Response({"type": "pet_results", "pets": [], "message": "Nekas netika atrasts."})
-#         else:
-#             # For informational questions, get GPT answer again
-#             try:
-#                 info_response = client.chat.completions.create(
-#                     model="gpt-4",
-#                     messages=[
-#                         {"role": "system", "content": "You are a friendly assistant for a lost pet website."},
-#                         {"role": "user", "content": user_input}
-#                     ]
-#                 )
-#                 print("Informational GPT response:", info_response)
-#                 reply = info_response.choices[0].message.content
-#                 return Response({"type": "info", "reply": reply})
-#             except Exception as e:
-#                 print("Error during GPT informational response:", e)
-#                 return Response({"type": "error", "reply": "Kļūda saziņā ar GPT."}, status=500)
-
-#     def search_pets(self, filters):
-#         print("Applying filters:", filters)
-
-#         qs = Pet.objects.filter(is_public=True, is_verified=True)
-#         print("Initial queryset count:", qs.count())
-
-#         status_map = {"lost": 1, "found": 2, "seen": 3}
-#         species_map = {"dog": 1, "cat": 2, "other": 3}
-#         size_map = {"small": 1, "medium": 2, "large": 3}
-#         color_map = {"brown": 7, "black": 1, "white": 3}  # Add more if needed
-
-#         if "status" in filters:
-#             qs = qs.filter(status=status_map.get(filters["status"], 1))
-#             print("Filtered by status:", filters["status"])
-#         if "species" in filters:
-#             qs = qs.filter(species=species_map.get(filters["species"], 1))
-#             print("Filtered by species:", filters["species"])
-#         if "size" in filters:
-#             qs = qs.filter(size=size_map.get(filters["size"], 1))
-#             print("Filtered by size:", filters["size"])
-#         if "color" in filters:
-#             qs = qs.filter(primary_color=color_map.get(filters["color"], 7))
-#             print("Filtered by color:", filters["color"])
-#         if "recent_days" in filters:
-#             since = now() - timedelta(days=filters["recent_days"])
-#             qs = qs.filter(created_at__gte=since)
-#             print("Filtered by recent_days:", filters["recent_days"])
-
-#         final_qs = qs.order_by("-created_at")[:5]
-#         print("Final queryset count:", final_qs.count())
-#         return final_qs
-# class ChatBotAPIView(APIView):
-#     permission_classes = [IsAuthenticated]  # Only authenticated users can use the chatbot
-    
-#     def post(self, request, *args, **kwargs):
-#         """
-#         Accepts a message from the user and returns a response generated by OpenAI,
-#         but only answers questions relevant to dogs, cats, and related topics.
-#         """
-        
-#         user_message = request.data.get('message', None)
-#         if not user_message:
-#             return Response({"error": "Message is required."}, status=status.HTTP_400_BAD_REQUEST)
-
-#         # Debugging: Print the incoming user message
-#         print(f"Received user message: {user_message}")
-
-#         try:
-#             # Define the system message to make the chatbot focus on dogs and cats
-#             system_message = (
-#                 "You are an expert cynologist and veterinarian specializing in dogs and cats. "
-#                 "Your job is to provide helpful, accurate, and relevant information about dogs and cats only. "
-#                 "You are not allowed to provide responses unrelated to dogs, cats, or any pets similar to them. "
-#                 "Your answers should include guidance on care, training, adoption, health issues, finding lost pets, etc. "
-#                 "Focus on providing the essential information only. "
-#                 "Avoid long explanations, and limit responses to a few sentences. "
-#                 "No unnecessary elaboration or details. Only what's necessary to answer the user's question. "
-#                 "If the question requires multiple steps, summarize the steps in short bullet points. "
-#                 # "Please be detailed and professional in your responses."
-                
-#             )
-
-#             # Combine the system prompt with the user's message to ensure focus
-#             conversation = [
-#                 {"role": "system", "content": system_message},
-#                 {"role": "user", "content": user_message}
-#             ]
-
-#             # Debugging: Print the conversation being sent to OpenAI
-#             print(f"Sending the following conversation to OpenAI: {conversation}")
-
-#             # Generate AI response
-#             response = client.chat.completions.create(
-#                 model="gpt-4",  # You can use "gpt-3.5-turbo" if you prefer a smaller model
-#                 messages=conversation
-#             )
-
-#             # Debugging: Print the raw response from OpenAI
-#             print(f"Raw response from OpenAI: {response}")
-
-#             # Extract the AI's response
-#             ai_response = response.choices[0].message.content.strip()
-
-#             # Debugging: Print the AI's response
-#             print(f"AI response: {ai_response}")
-
-#             # Return the AI's response as a JSON response
-#             return Response({"response": ai_response}, status=status.HTTP_200_OK)
-
-#         except Exception as e:
-#             # Debugging: Print the error message
-#             print(f"Error occurred: {str(e)}")
-#             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return qs.order_by("-created_at")[:3]
 
 
+# ============================================================================
+# PET RECOMMENDATION API VIEW
+# ============================================================================
 
-# Predefined scoring logic
+# Predefined scoring logic for pet recommendations
 QUESTIONS = [
     {
         "question": "Cik daudz vietas tev ir mājdzīvniekam?",
@@ -365,21 +209,20 @@ QUESTIONS = [
             {"answer": "Liela māja ar pagalmu", "scores": {"dog": 2, "cat": 0}},
         ],
     },
-    # Add more questions...
+    # Add more questions as needed
 ]
 
+
 class PetRecommendationAPIView(APIView):
+    """
+    AI-powered pet recommendation system based on user preferences.
+    """
     permission_classes = [IsAuthenticated]
-    
 
     def post(self, request, *args, **kwargs):
-        print("=== Debug Authentication ===")
-        print("Auth header:", request.headers.get('Authorization'))
-        print("User:", request.user)
-        print("User is authenticated:", request.user.is_authenticated)
-        print("Request headers:", dict(request.headers))
-        print("=========================")
-        
+        """
+        Generate pet recommendations based on user answers to lifestyle questions.
+        """
         user_answers = request.data.get('answers', [])
         if not user_answers:
             return Response(
@@ -387,9 +230,8 @@ class PetRecommendationAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        scores = {"dog": 0, "cat": 0, "none": 0}
-
         # Calculate scores based on user responses
+        scores = {"dog": 0, "cat": 0, "none": 0}
         for answer in user_answers:
             for question in QUESTIONS:
                 for option in question["options"]:
@@ -401,7 +243,7 @@ class PetRecommendationAPIView(APIView):
         best_pet = max(scores, key=scores.get)
 
         try:
-            # Generate response using OpenAI
+            # Generate detailed recommendation using OpenAI
             system_message = (
                 f"You are an expert in pet recommendations. "
                 f"Based on the user's responses, they are best suited for a {best_pet}. "
@@ -428,56 +270,27 @@ class PetRecommendationAPIView(APIView):
                 f"Focus on providing practical, real-world information that will help the user make an informed decision."
             )
 
-            conversation = [
-                {"role": "system", "content": system_message}
-            ]
-
-            print("=== Debug OpenAI Request ===")
-            print("System message:", system_message)
-            print("=========================")
-
             response = client.chat.completions.create(
                 model="gpt-4",
-                messages=conversation
+                messages=[{"role": "system", "content": system_message}]
             )
 
-            # Extract AI-generated content
+            # Extract and parse AI response
             ai_response = response.choices[0].message.content.strip()
             
-            print("=== Debug OpenAI Response ===")
-            print("Raw AI response:", ai_response)
-            print("=========================")
-
             try:
-                # Parse the AI response into a Python dictionary
                 parsed_response = json.loads(ai_response)
-                print("=== Debug Parsed Response ===")
-                print("Parsed JSON:", parsed_response)
-                print("=========================")
-
-                # Create the response data
                 response_data = {"pet": parsed_response["pet"]}
-                print("=== Debug Final Response ===")
-                print("Response being sent:", response_data)
-                print("Response type:", type(response_data))
-                print("=========================")
-
-                # Return the pet data directly
-                return JsonResponse(
-                    response_data,
-                    status=status.HTTP_200_OK
-                )
-            except json.JSONDecodeError as e:
-                print("=== Debug JSON Error ===")
-                print("Error parsing JSON:", str(e))
-                print("Raw response:", ai_response)
-                print("=========================")
+                
+                return JsonResponse(response_data, status=status.HTTP_200_OK)
+                
+            except json.JSONDecodeError:
                 return JsonResponse(
                     {"error": "Failed to parse AI response"},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
+                
         except Exception as e:
-            print(f"Error in OpenAI call: {str(e)}")  # Debug print
             return Response(
                 {"error": "Failed to generate recommendation"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

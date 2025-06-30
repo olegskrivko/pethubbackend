@@ -2,11 +2,15 @@ from django.contrib import admin
 from .models import Article, Paragraph
 
 class ParagraphInline(admin.TabularInline):
+    """
+    Inline admin for managing paragraphs within articles.
+    """
     model = Paragraph
     extra = 1  # Number of empty paragraph forms
     fields = ('title', 'image', 'text', 'order')  # Customize the fields displayed in the inline
     # Adding the image_url method in the Inline
     def image_url(self, obj):
+        """Return the URL of the Cloudinary image."""
         if obj.image:
             return obj.image.url  # Return the URL of the Cloudinary image
         return 'No image'
@@ -15,6 +19,9 @@ class ParagraphInline(admin.TabularInline):
     readonly_fields = ['image_url']  # Ensure this field is read-only
 
 class ArticleAdmin(admin.ModelAdmin):
+    """
+    Admin configuration for Article model.
+    """
     inlines = [ParagraphInline]
     list_display = ('title', 'created_at', 'updated_at', 'public')  # ✅ Show public status
     #search_fields = ('title', 'summary', 'tags__name')  # ✅ Allow searching by tags
@@ -25,6 +32,7 @@ class ArticleAdmin(admin.ModelAdmin):
 
      # Adding the image_url method for ArticleAdmin if needed (for image related fields)
     def image_url(self, obj):
+        """Return the first paragraph image URL for the article."""
         if obj.paragraphs.filter(image__isnull=False).exists():
             # This will check if there is an image in any of the paragraphs and return the first one
             first_paragraph_with_image = obj.paragraphs.filter(image__isnull=False).first()

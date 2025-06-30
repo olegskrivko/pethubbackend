@@ -1,61 +1,59 @@
-from django.shortcuts import render
-from rest_framework.pagination import PageNumberPagination
-# Create your views here.
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from .models import Pet, PetSightingHistory
-from .serializers import PetSerializer, PetSightingHistorySerializer, PosterSerializer
-
-from rest_framework import viewsets
-from rest_framework.filters import OrderingFilter, SearchFilter
-from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.permissions import AllowAny
-#from rest_framework.permissions import IsAuthenticated
-from django_filters import rest_framework as filters
-from django.db.models import OuterRef, Subquery
-from django.db.models import Q
-from django.utils.timezone import make_aware
-from datetime import datetime
-from django.utils import timezone
-import django_filters
-from django.utils.dateparse import parse_datetime
-from rest_framework.permissions import IsAuthenticated
-from rest_framework import status
-# from django.contrib.auth.models import User
-from decimal import Decimal, InvalidOperation
-from rest_framework.decorators import api_view, permission_classes
-from django.shortcuts import get_object_or_404
-from rest_framework.permissions import BasePermission
-from decimal import Decimal
-from django.utils.timezone import now
-from rest_framework.parsers import MultiPartParser, FormParser
-import cloudinary.uploader
+from django.shortcuts import render, get_object_or_404
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
-from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from django.utils.timezone import make_aware, now
+from django.utils.dateparse import parse_datetime
+from django.db.models import Q
+from django_filters import rest_framework as filters
 from django_filters import DateFilter
-# from .models import PushSubscription
-from math import radians, sin, cos, sqrt, atan2
-from django.http import JsonResponse
-from django.conf import settings
-from notifications.models import PushSubscription
-from rest_framework.pagination import PageNumberPagination
-from django.views.decorators.csrf import csrf_exempt
-from django.http import JsonResponse
-from pets.models import Poster
-import json
-from rest_framework import generics
 
-from notifications.utils import send_push_notification  # Import the push notification function
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status, viewsets, generics
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, AllowAny
+from rest_framework.filters import OrderingFilter, SearchFilter
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.exceptions import ValidationError
+from django_filters.rest_framework import DjangoFilterBackend
+
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
+from math import radians, sin, cos, sqrt, atan2
+import cloudinary.uploader
+import json
+
+from .models import Pet, PetSightingHistory, Poster
+from .serializers import PetSerializer, PetSightingHistorySerializer, PosterSerializer
+from notifications.models import PushSubscription
+from notifications.utils import send_push_notification
+
+User = get_user_model()
 
 # Maximum number of pets allowed per user
 MAX_PETS_PER_USER = 5
 
+
+# ============================================================================
+# UTILITY FUNCTIONS
+# ============================================================================
+
 def calculate_distance(lat1, lon1, lat2, lon2):
-    # Radius of the Earth in kilometers
-    R = 6371.0
+    """
+    Calculate the distance between two points using the Haversine formula.
+    
+    Args:
+        lat1, lon1: Coordinates of first point
+        lat2, lon2: Coordinates of second point
+        
+    Returns:
+        float: Distance in kilometers
+    """
+    R = 6371.0  # Radius of the Earth in kilometers
 
     # Convert latitude and longitude from degrees to radians
     lat1_rad = radians(lat1)
@@ -71,13 +69,15 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     a = sin(dlat / 2)**2 + cos(lat1_rad) * cos(lat2_rad) * sin(dlon / 2)**2
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
 
-    # Distance in kilometers
-    distance = R * c
-    return distance
-User = get_user_model()
+    return R * c
 
+
+# ============================================================================
+# FILTERS AND PAGINATION
+# ============================================================================
 
 class PetFilter(filters.FilterSet):
+    """Filter set for pet queries."""
     status = filters.NumberFilter(field_name='status', lookup_expr='exact')
     species = filters.NumberFilter(field_name='species', lookup_expr='exact') 
     age = filters.NumberFilter(field_name='age', lookup_expr='exact')
@@ -89,13 +89,13 @@ class PetFilter(filters.FilterSet):
     search = filters.CharFilter(method='filter_by_search', label='Search')
     
     def filter_by_color(self, queryset, name, value):
-        """ Filter pets by either primary_color or secondary_color matching the selected color """
+        """Filter pets by either primary_color or secondary_color matching the selected color."""
         return queryset.filter(
             Q(primary_color=value) | Q(secondary_color=value)
         )
     
     def filter_by_search(self, queryset, name, value):
-        """Split the search string into separate terms. Allow searching on name and notes"""
+        """Split the search string into separate terms. Allow searching on name and notes."""
         terms = value.strip().split()
         for term in terms:
             queryset = queryset.filter(
@@ -108,52 +108,287 @@ class PetFilter(filters.FilterSet):
         fields = ['search', 'species', 'age', 'gender', 'size', 'status', 'pattern', 'date', 'color']
 
 
+class PetPagination(PageNumberPagination):
+    """Pagination configuration for pet listings."""
+    page_size = 6
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+    def get_paginated_response(self, data):
+        return Response({
+            'links': {
+                'next': self.get_next_link(),
+                'previous': self.get_previous_link()
+            },
+            'count': self.page.paginator.count,
+            'total_pages': self.page.paginator.num_pages,
+            'results': data
+        })
+
+
+class PetSightingPagination(PageNumberPagination):
+    """Pagination configuration for pet sightings."""
+    page_size = 3
+    page_size_query_param = 'page_size'
+
+
+# ============================================================================
+# PET MANAGEMENT VIEWS
+# ============================================================================
+
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])  # Ensure only authenticated users can access
+@permission_classes([IsAuthenticated])
 def get_user_pets(request):
-    """
-    Fetch all pets created by the logged-in user.
-    """
-    print(request)
-    user = request.user  # Get the logged-in user
-    print(request)
+    """Fetch all pets created by the logged-in user."""
+    user = request.user
     pets = Pet.objects.filter(author=user)
     serializer = PetSerializer(pets, many=True)
     return Response(serializer.data)
 
-# class PosterCreateView(generics.CreateAPIView):
-#     queryset = Poster.objects.all()
-#     serializer_class = PosterSerializer
+
+class PetViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing pet objects."""
+    queryset = Pet.objects.all().order_by('-created_at')
+    serializer_class = PetSerializer
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    filter_backends = [DjangoFilterBackend, OrderingFilter, SearchFilter]
+    filterset_class = PetFilter
+    pagination_class = PetPagination
+    parser_classes = (MultiPartParser, FormParser)
+    
+    def get_queryset(self):
+        """Filter out closed pets for public view."""
+        return Pet.objects.filter(is_closed=False).order_by('-created_at')
+    
+    def list(self, request, *args, **kwargs):
+        """List pets with pagination."""
+        return super().list(request, *args, **kwargs)
+    
+    def perform_create(self, serializer):
+        """Create a new pet with validation and image upload."""
+        user = self.request.user
+        current_count = Pet.objects.filter(author=user).count()
+        
+        if current_count >= MAX_PETS_PER_USER:
+            raise ValidationError(
+                f"You have reached the limit of {MAX_PETS_PER_USER} pets per user. Contact us if you need more."
+            )
+
+        uploaded_images = {}
+        uploaded_images_list = []
+
+        # Handle image uploads (at least one required)
+        for i in range(1, 5):
+            image_field = f"pet_image_{i}_media"
+            image = self.request.FILES.get(image_field)
+
+            if image:
+                uploaded_image = cloudinary.uploader.upload(image)
+                uploaded_images_list.append(uploaded_image.get("secure_url"))
+
+        # Ensure at least one image is uploaded
+        if not uploaded_images_list:
+            raise ValidationError({"error": "At least one image must be uploaded."})
+
+        # Assign images sequentially to pet_image_1, pet_image_2, etc.
+        for index, image_url in enumerate(uploaded_images_list):
+            uploaded_images[f"pet_image_{index+1}"] = image_url
+
+        # Fill remaining image fields with None
+        for i in range(len(uploaded_images_list) + 1, 5):
+            uploaded_images[f"pet_image_{i}"] = None
+
+        # Get date and time from request
+        date = self.request.data.get("date")
+        time = self.request.data.get("time")
+
+        if date and time:
+            try:
+                combined_datetime_str = f"{date} {time}"
+                event_occurred_at = datetime.strptime(combined_datetime_str, "%Y-%m-%d %H:%M")
+                event_occurred_at = make_aware(event_occurred_at)
+            except ValueError:
+                event_occurred_at = now()
+        else:
+            event_occurred_at = now()
+
+        pet = serializer.save(
+            author=self.request.user,
+            event_occurred_at=event_occurred_at,
+            **uploaded_images
+        )
+        
+        # Send notification if status is 'lost'
+        if pet.status == 1:
+            self.send_notifications_for_lost_pet(pet.id)
+
+    def retrieve(self, request, pk=None):
+        """Retrieve a specific pet."""
+        pet = get_object_or_404(Pet, pk=pk)
+        serializer = self.get_serializer(pet)
+        return Response(serializer.data)
+    
+    def update(self, request, pk=None):
+        """Update a pet (only by the author)."""
+        pet = get_object_or_404(Pet, pk=pk, author=request.user)
+        serializer = self.get_serializer(pet, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def destroy(self, request, pk=None):
+        """Delete a pet (only by the author)."""
+        pet = get_object_or_404(Pet, pk=pk, author=request.user)
+        pet.delete()
+        return Response({"message": "Pet deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+    
+    def send_notifications_for_lost_pet(self, pet_id):
+        """Send push notifications for lost pets to nearby users."""
+        pet = Pet.objects.get(id=pet_id)
+        subscriptions = PushSubscription.objects.all()
+        nearby_users = []
+
+        for subscription in subscriptions:
+            distance = calculate_distance(
+                pet.latitude, pet.longitude, 
+                subscription.lat, subscription.lon
+            )
+            if distance <= subscription.distance:
+                nearby_users.append(subscription)
+
+        for subscription in nearby_users:
+            image_url = pet.pet_image_1 if pet.pet_image_1 else "https://example.com/default-image.jpg"
+            payload = {
+                "title": f"Uzmanību! Netālu no jums ir {pet.get_status_display()} mājdzīvnieks!",
+                "body": f"Netālu no jūsu atrašanās vietas ir {pet.get_status_display()} {pet.get_species_display()}!",
+                "url": f"{settings.DOMAIN_APP_URL}/pets/{pet.id}",
+                "image": image_url
+            }
+            send_push_notification(subscription, payload)
+
+        return JsonResponse({"status": "Notifications sent to nearby users."})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def pet_post_quota(request):
+    """Get the user's pet posting quota information."""
+    user = request.user
+    current_count = Pet.objects.filter(author=user).count()
+    remaining = max(MAX_PETS_PER_USER - current_count, 0)
+
+    return Response({
+        'limit': MAX_PETS_PER_USER,
+        'used': current_count,
+        'remaining': remaining
+    })
+
+
+# ============================================================================
+# PET SIGHTING VIEWS
+# ============================================================================
+
+class PetSightingView(APIView):
+    """Handles creating pet sighting entry (POST), listing pet sightings (GET), and deleting a sighting (DELETE)."""
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    
+    def get(self, request, id):
+        """List paginated pet sightings for a specific pet."""
+        pet = get_object_or_404(Pet, id=id)
+        sightings = PetSightingHistory.objects.filter(pet=pet)
+        serializer = PetSightingHistorySerializer(sightings, many=True)
+        return Response(serializer.data)
+
+    def post(self, request, id):
+        """Create a new pet sighting entry."""
+        pet = get_object_or_404(Pet, id=id)
+
+        # Block new sightings if the pet report is closed
+        if pet.is_closed:
+            return Response(
+                {"error": "Cannot add sightings to a closed pet report."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Handle image upload
+        uploaded_image_url = None
+        image = request.FILES.get('pet_image_media')
+        
+        if image:
+            uploaded_image = cloudinary.uploader.upload(image)
+            uploaded_image_url = uploaded_image.get("secure_url")
+
+        # Get date and time from request
+        date = request.data.get("date")
+        time = request.data.get("time")
+
+        if date and time:
+            try:
+                combined_datetime_str = f"{date} {time}"
+                event_occurred_at = datetime.strptime(combined_datetime_str, "%Y-%m-%d %H:%M")
+                event_occurred_at = make_aware(event_occurred_at)
+            except ValueError:
+                event_occurred_at = now()
+        else:
+            event_occurred_at = now()
+
+        # Create sighting
+        sighting_data = {
+            'pet': pet,
+            'status': request.data.get('status', 2),
+            'latitude': request.data.get('latitude'),
+            'longitude': request.data.get('longitude'),
+            'notes': request.data.get('notes', ''),
+            'reporter': request.user,
+            'pet_image': uploaded_image_url,
+            'is_public': request.data.get('is_public', True),
+            'is_verified': False
+        }
+
+        sighting = PetSightingHistory.objects.create(**sighting_data)
+        serializer = PetSightingHistorySerializer(sighting)
+        
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def delete(self, request, id, sighting_id):
+        """Delete a specific pet sighting (only by the reporter)."""
+        pet = get_object_or_404(Pet, id=id)
+        sighting = get_object_or_404(PetSightingHistory, id=sighting_id, pet=pet)
+        
+        # Check if user is the reporter or pet owner
+        if sighting.reporter != request.user and pet.author != request.user:
+            return Response(
+                {"error": "You don't have permission to delete this sighting."}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        sighting.delete()
+        return Response({"message": "Sighting deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+
+
+# ============================================================================
+# POSTER MANAGEMENT VIEWS
+# ============================================================================
 
 class UserPostersAPIView(APIView):
+    """View for managing user posters."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request, format=None):
+        """Get all posters for pets owned by the user."""
         user = request.user
         posters = Poster.objects.filter(pet__author=user)
         serializer = PosterSerializer(posters, many=True)
         return Response(serializer.data)
-# class UserPostersListView(generics.ListAPIView):
-#     serializer_class = PosterSerializer
-#     permission_classes = [IsAuthenticatedOrReadOnly]
 
-#     def get_queryset(self):
-#         user = self.request.user
-#         return Poster.objects.filter(pet__author=user)
-# @api_view(['GET'])
-# @permission_classes([IsAuthenticated])
-# def get_user_posters(request):
-#     """
-#     Return all posters created for pets owned by the current user.
-#     """
-#     user = request.user
-#     posters = Poster.objects.filter(pet__author=user)
-#     serializer = PosterSerializer(posters, many=True)
-#     return Response(serializer.data)
 
 class PosterBulkCreateView(APIView):
+    """View for creating multiple posters at once."""
     permission_classes = [IsAuthenticatedOrReadOnly]
+    
     def post(self, request):
+        """Create multiple posters for a pet."""
         pet_id = request.data.get('pet')
         name = request.data.get('name', '')
         count = int(request.data.get('count', 1))
@@ -173,8 +408,17 @@ class PosterBulkCreateView(APIView):
         
         return Response(posters, status=status.HTTP_201_CREATED)
 
+
+class PosterDetailView(generics.RetrieveAPIView):
+    """View for retrieving poster details."""
+    queryset = Poster.objects.all()
+    serializer_class = PosterSerializer
+    lookup_field = 'id'
+
+
 @csrf_exempt
 def increment_poster_scan(request, poster_id):
+    """Increment the scan count for a poster."""
     if request.method == 'POST':
         data = json.loads(request.body or "{}")
 
@@ -198,438 +442,29 @@ def increment_poster_scan(request, poster_id):
         })
 
 
-
-
+# ============================================================================
+# STATISTICS AND ANALYTICS VIEWS
+# ============================================================================
 
 class PetStatusCountsView(APIView):
+    """View for getting pet status statistics."""
     permission_classes = [AllowAny]
 
     def get(self, request, format=None):
-        lost_count = Pet.objects.filter(status=1).count()
-        found_count = Pet.objects.filter(status=2).count()
-        seen_count = Pet.objects.filter(status=3).count()
-
-        return Response({
-            'lost': lost_count,
-            'found': found_count,
-            'seen': seen_count,
-        })
-
-class PetPagination(PageNumberPagination):
-    page_size = 6  # Default page size
-    page_size_query_param = 'page_size'  # Allow clients to set the page size
-    max_page_size = 100  # Max number of items per page
-    # You can override the `get_paginated_response` method if you want to customize the structure of the response.
-    def get_paginated_response(self, data):
-        return Response({
-            'count': self.page.paginator.count,  # Total number of pets
-            'totalPages': self.page.paginator.num_pages,  # Total pages
-            'currentPage': self.page.number,  # Current page number
-            'results': data  # The paginated results
-        })
-
-    
-class PetViewSet(viewsets.ModelViewSet):
-    queryset = Pet.objects.all().order_by('-created_at')  # Order by created_at in descending order (most recent first)
-    serializer_class = PetSerializer
-    
-    # permission_classes = [AllowAny]
-    permission_classes = [IsAuthenticatedOrReadOnly]  # Allow public read access, but auth required for write operations
-    filter_backends = [DjangoFilterBackend, OrderingFilter, SearchFilter]
-    filterset_class = PetFilter
-    pagination_class = PetPagination
-    # filterset_fields = {
-    #     'species': ['in', 'exact'],  # Filter by species (multiple species allowed)
-    #     'breed': ['exact'],          # You can filter by breed if needed
-    #     'age': ['exact', 'gte', 'lte'],  # Filter by age (exact, greater than, or less than)
-    # }
-    parser_classes = (MultiPartParser, FormParser)
-    
-    def get_queryset(self):
-        # Filter out closed pets for public view
-        return Pet.objects.filter(is_closed=False).order_by('-created_at')
-    
-    def list(self, request, *args, **kwargs):
-        # The pagination logic is handled automatically by the pagination class
-        return super().list(request, *args, **kwargs)
-    
-    
-    def perform_create(self, serializer):
-        user = self.request.user
-        current_count = Pet.objects.filter(author=user).count()
+        """Get counts of pets by status."""
+        status_counts = {}
+        for status_choice in Pet.STATUS_CHOICES:
+            status_counts[status_choice[1]] = Pet.objects.filter(status=status_choice[0]).count()
         
-        if current_count >= MAX_PETS_PER_USER:
-            raise ValidationError(
-                f"You have reached the limit of {MAX_PETS_PER_USER} pets per user. Contact us if you need more."
-            )
-
-        uploaded_images = {}
-        uploaded_images_list = []  # Store uploaded images in order
-
-        # Handle image uploads (at least one required)
-        for i in range(1, 5):  # Loop from pet_image_1 to pet_image_4
-            image_field = f"pet_image_{i}_media"  # Field name from request
-            image = self.request.FILES.get(image_field)
-
-            if image:
-                uploaded_image = cloudinary.uploader.upload(image)
-                uploaded_images_list.append(uploaded_image.get("secure_url"))
-
-        # Ensure at least one image is uploaded
-        if not uploaded_images_list:
-            raise ValidationError({"error": "At least one image must be uploaded."})
-
-        # Assign images sequentially to pet_image_1, pet_image_2, etc.
-        for index, image_url in enumerate(uploaded_images_list):
-            uploaded_images[f"pet_image_{index+1}"] = image_url  # Assign in order
-
-        # Fill remaining image fields with None
-        for i in range(len(uploaded_images_list) + 1, 5):  # Ensure all 4 fields exist
-            uploaded_images[f"pet_image_{i}"] = None
-
-            # Get date and time from request
-        date = self.request.data.get("date")  # e.g., "2025-04-01"
-        time = self.request.data.get("time")  # e.g., "14:30"
-        print("date", self.request.data.get("date"))
-
-        if date and time:
-            try:
-                # Combine date and time into a single string
-                combined_datetime_str = f"{date} {time}"
-                # Parse the combined string into a datetime object
-                event_occurred_at = datetime.strptime(combined_datetime_str, "%Y-%m-%d %H:%M")
-                # Make it timezone-aware
-                event_occurred_at = make_aware(event_occurred_at)
-            except ValueError:
-                event_occurred_at = timezone.now()  # Default to now if the date/time is invalid
-        else:
-            event_occurred_at = timezone.now()  # Default to now if missing
-
-        pet = serializer.save(
-            author=self.request.user,
-            event_occurred_at=event_occurred_at,
-             **uploaded_images  # Dynamically assign images
-        )
-        # Send notification if status is 'lost'
-        if pet.status == 1:  # Or any other condition you want
-            self.send_notifications_for_lost_pet(pet.id)
-
-    def retrieve(self, request, pk=None):
-        pet = get_object_or_404(Pet, pk=pk)
-        serializer = self.get_serializer(pet)
-        return Response(serializer.data)
-    
-    def update(self, request, pk=None):
-        pet = get_object_or_404(Pet, pk=pk, author=request.user)
-        serializer = self.get_serializer(pet, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=400)
-    
-    def destroy(self, request, pk=None):
-        pet = get_object_or_404(Pet, pk=pk, author=request.user)
-        pet.delete()
-        return Response({"message": "Pet deleted successfully."}, status=204)
-    
-    def send_notifications_for_lost_pet(self, pet_id):
-        pet = Pet.objects.get(id=pet_id)
-
-        subscriptions = PushSubscription.objects.all()
-        nearby_users = []
-
-        for subscription in subscriptions:
-            distance = calculate_distance(pet.latitude, pet.longitude, subscription.lat, subscription.lon)
-            if distance <= subscription.distance:
-                nearby_users.append(subscription)
+        return Response(status_counts)
 
 
-        for subscription in nearby_users:
-            # Check if the pet has an image URL in pet_image_1, otherwise use a default image
-            image_url = pet.pet_image_1 if pet.pet_image_1 else "https://example.com/default-image.jpg"
-            payload = {
-                "title": f"Uzmanību! Netālu no jums ir {pet.get_status_display()} mājdzīvnieks!",
-                "body": f"Netālu no jūsu atrašanās vietas ir {pet.get_status_display()} {pet.get_species_display()}!",
-                "url": f"{settings.DOMAIN_APP_URL}/pets/{pet.id}",
-                "image": image_url  # Add the image URL to the payload
-            }
-            send_push_notification(subscription, payload)
-
-        return JsonResponse({"status": "Notifications sent to nearby users."})
-
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def pet_post_quota(request):
-    user = request.user
-
-    # Count how many pets the user has already posted
-    current_count = Pet.objects.filter(author=user).count()
-
-    remaining = max(MAX_PETS_PER_USER - current_count, 0)
-
-    return Response({
-        'limit': MAX_PETS_PER_USER,
-        'used': current_count,
-        'remaining': remaining
-    })
-
-
-class PosterDetailView(generics.RetrieveAPIView):
-    queryset = Poster.objects.all()
-    serializer_class = PosterSerializer
-    lookup_field = 'id'
-
-class PetSightingPagination(PageNumberPagination):
-    page_size = 3
-    page_size_query_param = 'page_size'
-
-
-class PetSightingView(APIView):
-    """Handles creating pet sighting entry (POST), listing pet sightings (GET), and deleting a sighting (DELETE)"""
-    permission_classes = [IsAuthenticatedOrReadOnly]
-    def get(self, request, id):
-        # List paginated pet sightings for a specific pet
-        pet = get_object_or_404(Pet, id=id)
-        sightings = PetSightingHistory.objects.filter(pet=pet)
-        serializer = PetSightingHistorySerializer(sightings, many=True)
-        return Response(serializer.data)
-
-    def post(self, request, id):
-        # Create a new pet sighting entry
-        pet = get_object_or_404(Pet, id=id)
-
-            # ✅ Block new sightings if the pet report is closed
-        if pet.is_closed:
-            return Response(
-                {"detail": "Ziņojums ir slēgts. Vairs nevar pievienot novērojumus."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        status_value = request.data.get('status')
-        latitude = request.data.get('latitude')
-        longitude = request.data.get('longitude')
-        notes = request.data.get('notes', '')
-        reporter = request.user
-
-        # Validate `status`
-        try:
-            status_value = int(status_value)
-            if status_value not in dict(PetSightingHistory.STATUS_CHOICES):
-                return Response({"error": "Invalid status value"}, status=status.HTTP_400_BAD_REQUEST)
-        except (ValueError, TypeError):
-            return Response({"error": "Invalid status format"}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Handle image upload (if provided)
-        image_url = None
-        image = request.FILES.get('image')
-        if image:
-            uploaded_image = cloudinary.uploader.upload(image)
-            image_url = uploaded_image.get("secure_url")
-
-
-        # Validate latitude/longitude only if provided
-        if latitude is not None and longitude is not None:
-            try:
-                latitude = Decimal(latitude)
-                longitude = Decimal(longitude)
-                if not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
-                    return Response({"error": "Latitude must be between -90 and 90 and longitude between -180 and 180."}, status=status.HTTP_400_BAD_REQUEST)
-            except (InvalidOperation, ValueError):
-                return Response({"error": "Invalid latitude or longitude format"}, status=status.HTTP_400_BAD_REQUEST)
-        else:
-            # If no coordinates provided, require at least image or notes to be present
-            if not image_url and not notes:
-                return Response({"error": "Either coordinates, an image, or notes must be provided."}, status=status.HTTP_400_BAD_REQUEST)
-        # Validate latitude/longitude
-        # if latitude and longitude:
-        #     try:
-        #         latitude = Decimal(latitude)
-        #         longitude = Decimal(longitude)
-        #     except (InvalidOperation, ValueError):
-        #         return Response({"error": "Invalid latitude or longitude format"}, status=status.HTTP_400_BAD_REQUEST)
-        # else:
-        #     return Response({"error": "Latitude and longitude are required"}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Save the pet sighting in the database
-        sighting = PetSightingHistory.objects.create(
-            pet=pet,
-            status=status_value,
-            latitude=latitude if latitude is not None else None,
-            longitude=longitude if longitude is not None else None,
-            # event_occurred_at=event_occurred_at,
-            notes=notes,
-            reporter=reporter,
-            pet_image=image_url
-        )
-
-
-        # Return success response
-        return Response({
-            "id": sighting.id,
-            "pet": sighting.pet.id,
-            "status": sighting.get_status_display(),
-            "latitude": sighting.latitude,
-            "longitude": sighting.longitude,
-            # "event_occurred_at": sighting.event_occurred_at,
-            "notes": sighting.notes,
-            "image": sighting.pet_image,
-            "reporter": sighting.reporter.id,
-        }, status=status.HTTP_201_CREATED)
-
-    def delete(self, request, id, sighting_id):
-        """
-        Delete a pet sighting entry.
-        Only the user who reported the sighting (sighting.reporter) can delete it.
-        """
-        # Get the pet instance by its ID
-        pet = get_object_or_404(Pet, id=id)
-        
-        # Get the pet sighting instance by its ID and ensure it belongs to the pet
-        sighting = get_object_or_404(PetSightingHistory, id=sighting_id, pet=pet)
-
-        # Ensure that only the user who reported the sighting can delete it
-        if sighting.reporter != request.user:
-            raise PermissionDenied("You are not authorized to delete this sighting.")
-
-        # Perform the deletion
-        sighting.delete()
-
-        return Response({"message": "Pet sighting deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
-
-    
 class RecentPetsView(APIView):
+    """View for getting recent pets."""
+    permission_classes = [AllowAny]
+
     def get(self, request, *args, **kwargs):
-        try:
-            # Assuming you want the most recent pets based on some ordering criteria
-            recent_pets = Pet.objects.all().order_by('-created_at')[:4]  # Adjust based on your criteria
-            serializer = PetSerializer(recent_pets, many=True)
-            return Response(serializer.data)
-        except Exception as e:
-            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-# class PetSightingView(APIView):
-#     """
-#     Handles creating pet sighting entry (POST), listing pet sightings (GET), and deleting a sighting (DELETE)
-#     """
-#     permission_classes = [IsAuthenticatedOrReadOnly]
-
-#     def get(self, request, id):
-#         # List paginated pet sightings for a specific pet
-#         pet = get_object_or_404(Pet, id=id)
-#         sightings = PetSightingHistory.objects.filter(pet=pet).order_by('-created_at')
-
-#         paginator = PetSightingPagination()
-#         page = paginator.paginate_queryset(sightings, request)
-#         serializer = PetSightingHistorySerializer(page, many=True)
-
-#         return paginator.get_paginated_response(serializer.data)
-
-#     def post(self, request, id):
-#         # Create a new pet sighting entry
-#         pet = get_object_or_404(Pet, id=id)
-
-#         status_value = request.data.get('status')
-#         latitude = request.data.get('latitude')
-#         longitude = request.data.get('longitude')
-#         notes = request.data.get('notes', '')
-#         reporter = request.user
-
-#         # Validate `status`
-#         try:
-#             status_value = int(status_value)
-#             if status_value not in dict(PetSightingHistory.STATUS_CHOICES):
-#                 return Response({"error": "Invalid status value"}, status=status.HTTP_400_BAD_REQUEST)
-#         except (ValueError, TypeError):
-#             return Response({"error": "Invalid status format"}, status=status.HTTP_400_BAD_REQUEST)
-
-#         # Handle image upload (if provided)
-#         image_url = None
-#         image = request.FILES.get('image')
-#         if image:
-#             uploaded_image = cloudinary.uploader.upload(image)
-#             image_url = uploaded_image.get("secure_url")
-
-#         # Validate latitude/longitude only if provided
-#         if latitude is not None and longitude is not None:
-#             try:
-#                 latitude = Decimal(latitude)
-#                 longitude = Decimal(longitude)
-#                 if not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
-#                     return Response({"error": "Latitude must be between -90 and 90 and longitude between -180 and 180."}, status=status.HTTP_400_BAD_REQUEST)
-#             except (InvalidOperation, ValueError):
-#                 return Response({"error": "Invalid latitude or longitude format"}, status=status.HTTP_400_BAD_REQUEST)
-#         else:
-#             # Require at least image or notes if no coordinates
-#             if not image_url and not notes:
-#                 return Response({"error": "Either coordinates, an image, or notes must be provided."}, status=status.HTTP_400_BAD_REQUEST)
-
-#         # Save the pet sighting in the database
-#         sighting = PetSightingHistory.objects.create(
-#             pet=pet,
-#             status=status_value,
-#             latitude=latitude if latitude is not None else None,
-#             longitude=longitude if longitude is not None else None,
-#             notes=notes,
-#             reporter=reporter,
-#             pet_image=image_url
-#         )
-
-#         return Response({
-#             "id": sighting.id,
-#             "pet": sighting.pet.id,
-#             "status": sighting.get_status_display(),
-#             "latitude": sighting.latitude,
-#             "longitude": sighting.longitude,
-#             "notes": sighting.notes,
-#             "image": sighting.pet_image,
-#             "reporter": sighting.reporter.id,
-#         }, status=status.HTTP_201_CREATED)
-
-
-# @csrf_exempt
-# def increment_poster_scan(request, poster_id):
-#     if request.method == 'POST':
-#         data = json.loads(request.body)
-
-#         try:
-#             poster = Poster.objects.get(id=poster_id)
-#         except Poster.DoesNotExist:
-#             return JsonResponse({"error": "Poster not found."}, status=404)
-
-#         # If the poster has no location, store it from the scan
-#         if not poster.has_location:
-#             lat = data.get('latitude')
-#             lon = data.get('longitude')
-#             if lat is not None and lon is not None:
-#                 poster.latitude = lat
-#                 poster.longitude = lon
-#                 poster.has_location = True
-
-#         poster.scans += 1
-#         poster.save()
-
-#         return JsonResponse({
-#             "status": "ok",
-#             "scans": poster.scans,
-#             "latitude": poster.latitude,
-#             "longitude": poster.longitude
-#         })    
-# @csrf_exempt
-# def set_poster_location(request, poster_id):
-#     if request.method == 'POST':
-#         data = json.loads(request.body)
-#         poster = Poster.objects.get(id=poster_id)
-#         if not poster.has_location:
-#             poster.latitude = data['latitude']
-#             poster.longitude = data['longitude']
-#             poster.has_location = True
-#             poster.save()
-#         return JsonResponse({"status": "ok"})
-    
-# @csrf_exempt
-# def increment_poster_scan(request, poster_id):
-#     if request.method == 'POST':
-#         poster = Poster.objects.get(id=poster_id)
-#         poster.scans += 1
-#         poster.save()
-#         return JsonResponse({"status": "ok", "scans": poster.scans})
+        """Get the most recent pets."""
+        recent_pets = Pet.objects.filter(is_closed=False).order_by('-created_at')[:6]
+        serializer = PetSerializer(recent_pets, many=True)
+        return Response(serializer.data)
