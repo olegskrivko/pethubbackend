@@ -13,6 +13,19 @@ This is the backend service for the PetHub app — a platform to help find lost 
 - Data validation and error handling for reliable operations  
 - Open source and community-driven, welcoming contributions 
 
+## Features Usage
+The backend exposes REST endpoints for pet data management.
+For API details, see the documentation (if available) or contact the maintainer.
+
+## Contributing
+This project is open source and welcomes contributions! Please open issues or submit pull requests.
+
+## License
+This project is licensed under the MIT License. See the LICENSE file for details.
+
+## Author
+Olegs Krivko
+
 ## Getting Started
 
 ### Requirements
@@ -51,17 +64,3 @@ This is the backend service for the PetHub app — a platform to help find lost 
 
 ```bash
   python manage.py runserver
-
-## Features Usage
-The backend exposes REST endpoints for pet data management.
-For API details, see the documentation (if available) or contact the maintainer.
-
-## Contributing
-This project is open source and welcomes contributions! Please open issues or submit pull requests.
-
-## License
-This project is licensed under the MIT License. See the LICENSE file for details.
-
-## Author
-Olegs Krivko
-https://lunori.app
